@@ -70,6 +70,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     <b style="color:var(--text)">あそびかた</b>
     ・「召喚」を押すとサイコロが出ます（押すたびに必要SPが上がります）<br>
     ・同じ種類・同じ目のサイコロを指で重ねると合体。目が1つ増えて、種類はランダムに変わります（最大7）<br>
+    ・サイコロや強化ボタンを長押しすると、能力の説明が出ます<br>
     ・下のボタンで、種類ごとに試合中だけ強化できます<br>
     ・敵が道の出口まで行くとハートが減ります。10ウェーブごとにボスが出ます
   </div>
@@ -249,7 +250,7 @@ function powerUp(side,t){
 }
 
 // ====== ウェーブ ======
-function enemyHP(w){return Math.round(80*Math.pow(1.16,w-1)+w*15);}
+function enemyHP(w){return Math.round(280*Math.pow(1.115,w-1)+w*20);}
 function startWave(){
   G.wave++;const w=G.wave;
   const n=Math.min(8+w,26);const q=[];
@@ -273,7 +274,7 @@ function spawnEnemy(spec){
   let hp=base,speed=52,size=11,lifeDmg=1,sp=10+w;
   if(spec.type==='fast'){hp=base*0.5;speed=90;size=9;}
   if(spec.type==='tank'){hp=base*3;speed=34;size=14;sp=2*(10+w);lifeDmg=2;}
-  if(spec.type==='boss'){hp=base*35;speed=22;size=22;sp=200+10*w;lifeDmg=99;}
+  if(spec.type==='boss'){hp=base*40;speed=22;size=22;sp=200+10*w;lifeDmg=99;}
   G.enemies.push({type:spec.type,hp,maxhp:hp,speed,size,dist:0,slow:0,slowT:0,poison:0,poisonT:0,lifeDmg,sp,skillT:6,x:PATH[0][0],y:PATH[0][1],hitT:0});
 }
 
@@ -479,7 +480,7 @@ function drawBoard(side){
     const[x,y]=cellXY(side,i);
     ctx.fillStyle=side==='me'?'#262a52':'#22264a';rr(x,y,CELL,CELL,11);ctx.fill();
     const d=s.dice[i];
-    if(G.drag&&side==='me'&&G.drag.from===i)continue;
+    if(G.drag&&side==='me'&&G.drag.from===i&&!holdInfo())continue;
     if(d){
       let a=1;
       if(G.drag&&side==='me'){const src=s.dice[G.drag.from];a=canMerge(src,d)?1:0.35;}
@@ -528,7 +529,10 @@ function draw(){
   drawBoard('me');
   // 自分のSP
   ctx.font='bold 14px sans-serif';ctx.textAlign='left';ctx.fillStyle='#ffcc4d';ctx.fillText('SP '+Math.floor(G.me.sp),BX,612);
-  ctx.textAlign='right';ctx.fillStyle='#a3a7d1';ctx.font='12px sans-serif';ctx.fillText('同じ種類・同じ目を重ねて合体',W-BX,612);
+  ctx.textAlign='right';ctx.font='12px sans-serif';
+  {const dd=G.drag&&G.me.dice[G.drag.from];
+   if(dd){ctx.fillStyle=DICE[dd.type].c;ctx.fillText(DICE[dd.type].n+'★'+dd.pip+'：'+DICE[dd.type].d,W-BX,612,250);}
+   else{ctx.fillStyle='#a3a7d1';ctx.fillText('長押しで能力を確認／同じ種類・同じ目を重ねて合体',W-BX,612,250);}}
   // 強化ボタン
   G.me.deck.forEach((t,k)=>{
     const x=10+k*69,y=622,w=64,h=58;const c=powerCost(G.me,t);const ok=G.me.sp>=c;
@@ -546,7 +550,7 @@ function draw(){
   ctx.fillStyle=can?'#2a1d00':'#a3a7d1';ctx.font='bold 20px sans-serif';ctx.textAlign='center';
   ctx.fillText('召喚',W/2,716);ctx.font='13px sans-serif';ctx.fillText(G.me.dice.some(d=>!d)?'SP '+sc:'マスがいっぱい（合体しよう）',W/2,736);
   // ドラッグ中
-  if(G.drag){const d=G.me.dice[G.drag.from];if(d)drawDie(d,G.drag.x-CELL/2,G.drag.y-CELL/2,CELL,0.9);}
+  if(G.drag&&!holdInfo()){const d=G.me.dice[G.drag.from];if(d)drawDie(d,G.drag.x-CELL/2,G.drag.y-CELL/2,CELL,0.9);}
   // ウェーブ表示
   if(G.breakT>0&&G.wave>=0){
     const nxt=G.wave+1;ctx.fillStyle='rgba(20,22,43,.75)';rr(70,330,220,56,14);ctx.fill();
@@ -563,6 +567,33 @@ function draw(){
     ctx.fillStyle='#14162b';ctx.textAlign='center';ctx.fillText(G.bubble,W/2,by+20,tw-12);
     ctx.globalAlpha=1;
   }
+  // 長押しの説明カード（いちばん上に表示）
+  const info=holdInfo();
+  if(info)drawInfo(info);
+}
+function holdInfo(){
+  const h=G.hold;if(!h||h.moved||G.time-h.t0<0.35)return null;
+  if(h.kind==='die'){const d=G[h.side].dice[h.i];if(!d)return null;return{type:d.type,pip:d.pip,side:h.side,y:h.y};}
+  if(h.kind==='power')return{type:h.type,side:'me',y:h.y,power:true};
+  return null;
+}
+function wrapText(t,maxW){const out=[];let line='';for(const ch of t){if(ctx.measureText(line+ch).width>maxW){out.push(line);line=ch;}else line+=ch;}if(line)out.push(line);return out;}
+function drawInfo(o){
+  const def=DICE[o.type],s=G[o.side];
+  ctx.font='13px sans-serif';const lines=wrapText(def.d,266);
+  const hgt=58+lines.length*18+(o.pip&&o.type!=='joker'?18:0);
+  const w=310,x=(W-w)/2;let y=o.y-hgt-40;if(y<46)y=o.y+46;if(y+hgt>H-6)y=H-6-hgt;
+  ctx.fillStyle='rgba(10,11,25,.96)';rr(x,y,w,hgt,14);ctx.fill();
+  ctx.strokeStyle=def.c;ctx.lineWidth=2;rr(x,y,w,hgt,14);ctx.stroke();
+  ctx.fillStyle=def.c;rr(x+14,y+14,26,26,7);ctx.fill();
+  ctx.fillStyle='#f2f3ff';ctx.font='bold 16px sans-serif';ctx.textAlign='left';
+  ctx.fillText(def.n+(o.pip?'  ★'+o.pip:''),x+50,y+33);
+  ctx.textAlign='right';ctx.font='12px sans-serif';ctx.fillStyle='#a3a7d1';
+  ctx.fillText(def.r+'・強化Lv'+(s.lvl[o.type]||1),x+w-14,y+32);
+  ctx.textAlign='left';ctx.fillStyle='#f2f3ff';ctx.font='13px sans-serif';
+  lines.forEach((l,k)=>ctx.fillText(l,x+14,y+62+k*18));
+  if(o.pip&&o.type!=='joker'){ctx.fillStyle='#ffcc4d';ctx.font='12px sans-serif';
+    ctx.fillText(o.pip>=7?'★7は最大（これ以上合体できません）':'合体できる相手：'+def.n+'の★'+o.pip,x+14,y+62+lines.length*18);}
 }
 function heart(x,y,r){ctx.beginPath();ctx.moveTo(x,y+r*0.9);ctx.bezierCurveTo(x-r*1.6,y-r*0.2,x-r*0.6,y-r*1.3,x,y-r*0.35);ctx.bezierCurveTo(x+r*0.6,y-r*1.3,x+r*1.6,y-r*0.2,x,y+r*0.9);ctx.fill();}
 function short(n){n=Math.ceil(n);if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e4)return Math.round(n/1e3)+'k';if(n>=1e3)return (n/1e3).toFixed(1)+'k';return ''+n;}
@@ -575,20 +606,32 @@ cv.addEventListener('pointerdown',ev=>{
   const[x,y]=toLogical(ev);
   if(x>W-58&&y<42){pause();return;}
   if(y>=690&&y<=748&&x>=BX&&x<=W-BX){summon('me');return;}
-  if(y>=622&&y<=680){const k=Math.floor((x-10)/69);if(k>=0&&k<5&&x-10-k*69<=64){powerUp('me',G.me.deck[k]);}return;}
+  if(y>=622&&y<=680){const k=Math.floor((x-10)/69);if(k>=0&&k<5&&x-10-k*69<=64){G.hold={kind:'power',type:G.me.deck[k],x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}return;}
   const i=cellAt('me',x,y);
-  if(i>=0&&G.me.dice[i]){G.drag={from:i,x,y};cv.setPointerCapture(ev.pointerId);}
+  if(i>=0&&G.me.dice[i]){G.drag={from:i,x,y,sx:x,sy:y};G.hold={kind:'die',side:'me',i,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);return;}
+  const j=cellAt('bot',x,y);
+  if(j>=0&&G.bot.dice[j]){G.hold={kind:'die',side:'bot',i:j,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}
 });
-cv.addEventListener('pointermove',ev=>{if(!G||!G.drag)return;const[x,y]=toLogical(ev);G.drag.x=x;G.drag.y=y;});
+cv.addEventListener('pointermove',ev=>{
+  if(!G)return;const[x,y]=toLogical(ev);
+  if(G.hold&&Math.hypot(x-G.hold.x,y-G.hold.y)>10)G.hold.moved=true;
+  if(G.drag){G.drag.x=x;G.drag.y=y;}
+});
 function endDrag(ev){
-  if(!G||!G.drag)return;const[x,y]=toLogical(ev);const from=G.drag.from;G.drag=null;
+  if(!G)return;const[x,y]=toLogical(ev);
+  const h=G.hold;G.hold=null;
+  if(h&&h.kind==='power'){ // 短く押したら強化、長押しは説明だけ
+    if(G.time-h.t0<0.35&&!h.moved&&y>=622&&y<=680)powerUp('me',h.type);
+    return;
+  }
+  if(!G.drag)return;const from=G.drag.from;G.drag=null;
   const to=cellAt('me',x,y);if(to>=0&&to!==from)merge('me',from,to);
 }
 cv.addEventListener('pointerup',endDrag);
-cv.addEventListener('pointercancel',()=>{if(G)G.drag=null;});
+cv.addEventListener('pointercancel',()=>{if(G){G.drag=null;G.hold=null;}});
 
 // ====== 一時停止 ======
-function pause(){if(!G||G.over)return;G.paused=true;G.drag=null;show('ovPause',true);}
+function pause(){if(!G||G.over)return;G.paused=true;G.drag=null;G.hold=null;show('ovPause',true);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 window.addEventListener('pagehide',pause);
 document.getElementById('bResume').onclick=()=>{G.paused=false;show('ovPause',false);last=performance.now();};
