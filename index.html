@@ -1,16 +1,7 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ダイスバディ">
-<meta name="theme-color" content="#14162b">
 <title>ダイスバディ</title>
 <style>
 :root{
+  color-scheme:dark;
   --bg:#14162b; --panel:#1f2240; --panel2:#2a2e55; --text:#f2f3ff; --muted:#a3a7d1;
   --accent:#ffcc4d; --good:#5be38a; --bad:#ff6b6b; --line:#3a3f73;
 }
@@ -77,8 +68,6 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 .gres .tag{font-size:13px;color:var(--muted)}
 .gres .new{color:var(--accent);font-weight:800}
 </style>
-</head>
-<body>
 <div id="wrap"><canvas id="cv"></canvas></div>
 
 <!-- タイトル -->
@@ -86,17 +75,11 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <h1>ダイス<span>バディ</span></h1>
   <p class="sub">サイコロを合体させて、相棒と一緒に敵を止めよう</p>
   <div style="height:16px"></div>
-  <div id="tMsg" class="msg info">読み込み中…</div>
-  <div id="loginArea" class="card" style="display:none">
-    <div style="font-size:14px;color:var(--muted);line-height:1.6">遊ぶにはGoogleでログインしてください。ゴールドやサイコロはネット上に保存され、PCでも同じデータで遊べます。</div>
-    <button class="btn" id="bLogin">Googleでログイン</button>
-    <button class="btn sec" id="bLoginAlt" style="display:none">うまくいかないときはこちら<small>別の方法でログイン</small></button>
-  </div>
+  <div id="tMsg" class="msg info">保存機能に接続しています…</div>
   <div id="menuArea" style="display:none;flex-direction:column;gap:14px">
-    <div class="card goldbar"><span id="tWho"></span><span><b id="tGold">0</b> G</span></div>
+    <div class="card goldbar"><span>所持ゴールド</span><span><b id="tGold">0</b> G</span></div>
     <button class="btn" id="bBot">相棒と遊ぶ</button>
     <div class="row"><button class="btn sec" id="bGacha" style="font-size:16px;padding:14px">ガチャ</button><button class="btn sec" id="bDice" style="font-size:16px;padding:14px">サイコロ</button></div>
-    <button class="btn sec" id="bFriend" disabled>フレンドと遊ぶ<small>準備中</small></button>
   </div>
   <div class="card help">
     <b style="color:var(--text)">あそびかた</b>
@@ -108,7 +91,6 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     ・試合が終わると「到達ウェーブ×10」ゴールドがもらえます。途中でやめても、そこまでの分はもらえます<br>
     ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv10）
   </div>
-  <button class="link" id="bLogout" style="display:none">ログアウト</button>
 </div></section>
 
 <!-- ガチャ -->
@@ -329,7 +311,10 @@ function startWave(){
   }
   G.spawnQ=q;G.spawnT=0;
   G.spawnInt=Math.max(0.55,1.1-w*0.02);
-  if(G.matchId)Cloud().progress(G.matchId,w-1).catch(e=>console.warn('途中経過の保存に失敗',e));
+  // ウェーブを越えるたびに到達記録を保存（途中で閉じてもその分の報酬は確定）
+  if(G.matchId&&w>1){const g=G;Cloud().progress(g.matchId,w-1)
+    .then(()=>{g.saveErr=null;})
+    .catch(e=>{g.saveErr='到達記録を保存できていません：'+errText(e);});}
   if(w>1 && (w-1)%5===0) say(fmt(pick(LINES.milestone),{w:w-1}),1);
 }
 function spawnEnemy(spec){
@@ -531,7 +516,7 @@ function settleMatch(id,w){
     msg('oMsg',r?'+'+r.gold+'G を受け取りました（所持 '+p.gold+'G）':'この試合の報酬は受け取り済みです（所持 '+p.gold+'G）','ok');
     b1.disabled=b2.disabled=false;
   }).catch(e=>{
-    msg('oMsg','報酬の保存に失敗しました\n'+errText(e)+'\n（次にログインしたときにも受け取れます）','ng');
+    msg('oMsg','報酬の保存に失敗しました\n'+errText(e)+'\n（次にゲームを開いたときにも受け取れます）','ng');
     br.style.display='';br.onclick=()=>settleMatch(id,w);
     b1.disabled=b2.disabled=false;
   });
@@ -646,6 +631,11 @@ function draw(){
     ctx.beginPath();ctx.moveTo(W/2-6,by);ctx.lineTo(W/2,by-7);ctx.lineTo(W/2+6,by);ctx.fill();
     ctx.fillStyle='#14162b';ctx.textAlign='center';ctx.fillText(G.bubble,W/2,by+20,tw-12);
     ctx.globalAlpha=1;
+  }
+  // 途中経過の保存に失敗したときの表示（次のウェーブでもう一度保存する）
+  if(G.saveErr){
+    ctx.fillStyle='rgba(74,29,38,.95)';rr(8,40,W-16,20,6);ctx.fill();
+    ctx.fillStyle='#ff6b6b';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(G.saveErr,14,54,W-28);
   }
   // 長押しの説明カード（いちばん上に表示）
   const info=holdInfo();
@@ -789,28 +779,24 @@ function startMatch(msgId,btnId,onReady){
   });
 }
 
-// ====== ログイン・保存データ ======
-let profile=null;      // ネット上で確認できた最新の保存データ
-const Cloud=()=>{if(!window.Cloud)throw new Error('保存の仕組みがまだ読み込まれていません');return window.Cloud;};
+// ====== 保存データ ======
+let profile=null;      // 保存して読み直しで確認できた最新の保存データ
+const Cloud=()=>{if(!window.Cloud)throw new Error('保存機能につながっていません');return window.Cloud;};
 const owned=t=>!!(profile&&profile.dice[t]);
 const dieLv=t=>(profile&&profile.dice[t]&&profile.dice[t].lv)||1;
-function errText(e){return(e&&e.code?e.code+'\n':'')+(e&&e.message?e.message:String(e));}
+function errText(e){if(!e)return'不明なエラー';const c=e.code||e.name||'';return(c?c+' / ':'')+(e.message||String(e));}
 function msg(id,text,kind){const m=document.getElementById(id);m.textContent=text||'';m.className='msg '+(kind||'');}
 function setProfile(p){
   profile=p;session.plays=p.plays;session.best=p.best;
   ['tGold','gGold','dGold'].forEach(id=>document.getElementById(id).textContent=p.gold);
 }
 let first=true;
+// 保存機能につながって読み込めたときだけメニュー（試合・ガチャ・サイコロ）を出す
 function renderMenu(){
-  const u=window.__user;
-  document.getElementById('loginArea').style.display=u?'none':'flex';
-  document.getElementById('menuArea').style.display=u&&profile?'flex':'none';
-  document.getElementById('bLogout').style.display=u?'':'none';
-  if(u)document.getElementById('tWho').textContent=(u.displayName||u.email||'')+' さん';
+  document.getElementById('menuArea').style.display=profile?'flex':'none';
 }
-window.__onUser=u=>{
-  window.__user=u;profile=null;renderMenu();
-  if(!u){msg('tMsg','');return;}
+window.__onReady=()=>{
+  profile=null;renderMenu();
   msg('tMsg','データを読み込み中…','info');
   Cloud().load().then(({profile:p,result:r})=>{
     setProfile(p);
@@ -825,18 +811,10 @@ window.__onUser=u=>{
   }).catch(e=>{
     msg('tMsg','データの読み込みに失敗しました\n'+errText(e),'ng');
     const b=document.createElement('button');b.className='btn sec';b.textContent='もう一度読み込む';
-    b.onclick=()=>window.__onUser(window.__user);document.getElementById('tMsg').appendChild(b);
+    b.onclick=()=>window.__onReady();document.getElementById('tMsg').appendChild(b);
   });
 };
-document.getElementById('bLogin').onclick=()=>{
-  msg('tMsg','ログイン中…','info');
-  Cloud().login().catch(e=>{
-    msg('tMsg','ログインに失敗しました\n'+errText(e),'ng');
-    document.getElementById('bLoginAlt').style.display='';
-  });
-};
-document.getElementById('bLoginAlt').onclick=()=>{msg('tMsg','Googleのページへ移動します…','info');Cloud().loginRedirect().catch(e=>msg('tMsg','ログインに失敗しました\n'+errText(e),'ng'));};
-document.getElementById('bLogout').onclick=()=>Cloud().logout();
+window.__onFail=t=>{profile=null;renderMenu();msg('tMsg',t,'ng');};
 
 // ====== ガチャ ======
 const BY_RARITY={};ALL.forEach(t=>(BY_RARITY[DICE[t].r]=BY_RARITY[DICE[t].r]||[]).push(t));
@@ -897,64 +875,44 @@ requestAnimationFrame(loop);
 window.__dice={get G(){return G;},update,newGame,decks,summon,merge,botAct,session,get profile(){return profile;},setProfile,gameOver};
 })();
 </script>
-<!-- ====== ネット保存（Firebase：Googleログイン＋Firestore） ====== -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-import { getFirestore, doc, runTransaction, getDocFromServer, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-
-// Firebase のWeb用設定（公開して問題ない値。データの守りは Firestore のルール側で行う）
-const app = initializeApp({
-  apiKey: "AIzaSyBJ6iBd3rC5fY7yjXaXwjOg9p6y4qGCAZM",
-  authDomain: "dice-buddy.firebaseapp.com",
-  projectId: "dice-buddy",
-  storageBucket: "dice-buddy.firebasestorage.app",
-  messagingSenderId: "289241985349",
-  appId: "1:289241985349:web:295f453b69f915accd4e2c"
-});
-const auth = getAuth(app);
-const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
-
+<!-- ====== 保存（Claudeのクラウド保存：Artifact の db） ====== -->
+<script>
+(()=>{
+'use strict';
 const GACHA_COST = 100;
 const RATES = [["ノーマル", 60], ["レア", 28], ["エピック", 10], ["伝説", 2]];
 const START_DICE = ["fire", "elec", "wind", "poison", "ice"];
 const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match"];
 
-// 保存データ users/{uid}
+// 保存データ data/users/<自分のid>/profile（自分専用・ほかの人からは見えない）
 //  gold, dice:{種類:{lv,sh(かけら)}}, plays, best, botName, deckMe, deckBot, match:{id,wave}|null
 function fresh() {
   const dice = {}; START_DICE.forEach(t => dice[t] = { lv: 1, sh: 0 });
   return { gold: 300, dice, plays: 0, best: 0, botName: "ダイスケ", deckMe: START_DICE.slice(), deckBot: null, match: null };
 }
 const only = d => { const o = {}; for (const k of KEYS) o[k] = d[k] ?? null; return o; };
+const clone = v => JSON.parse(JSON.stringify(v));
 // 並び順に左右されない比較用の文字列
 function canon(v) {
   if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
   if (v && typeof v === "object") return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
   return JSON.stringify(v ?? null);
 }
-function ref() {
-  if (!auth.currentUser) throw new Error("ログインしていません");
-  return doc(db, "users", auth.currentUser.uid);
-}
 
-// 保存は1つずつ順番に。保存したら必ずネットから読み直し、一致したときだけ成功
+let ref = null;
+// 保存は1つずつ順番に。毎回いちばん新しい保存データを読んでから変更し、
+// 書いたら必ず読み直して、一致したときだけ成功とする
 let queue = Promise.resolve();
 function commit(change) {
   const job = queue.then(async () => {
-    const r = ref(); let result;
-    const next = await runTransaction(db, async tx => {
-      const snap = await tx.get(r);
-      const n = structuredClone(snap.exists() ? only(snap.data()) : fresh());
-      result = change(n);
-      tx.set(r, { ...n, updatedAt: serverTimestamp() });
-      return n;
-    });
-    const back = await getDocFromServer(r);
-    if (!back.exists() || canon(only(back.data())) !== canon(next)) throw new Error("保存後に読み直した内容が一致しませんでした");
-    return { profile: only(back.data()), result };
+    if (!ref) throw new Error("保存機能につながっていません");
+    const snap = await ref.get();
+    const n = clone(snap && snap.exists ? only(snap.data()) : fresh());
+    const result = change(n);
+    await ref.set({ ...n, updatedAt: Date.now() });
+    const back = await ref.get();
+    if (!back || !back.exists || canon(only(back.data())) !== canon(n)) throw new Error("保存後に読み直した内容が一致しませんでした");
+    return { profile: clone(only(back.data())), result };
   });
   queue = job.catch(() => {});
   return job;
@@ -969,9 +927,6 @@ function settle(n) {
 }
 
 window.Cloud = {
-  async login() { await setPersistence(auth, browserLocalPersistence); await signInWithPopup(auth, provider); },
-  loginRedirect() { return signInWithRedirect(auth, provider); },
-  logout() { return signOut(auth); },
   // 読み込み（はじめての人はデータを作る。前回途中で閉じた試合があれば報酬を確定）
   load() { return commit(n => ({ left: settle(n) })); },
   startMatch({ deckMe, deckBot, botName }) {
@@ -1019,11 +974,19 @@ window.Cloud = {
   },
 };
 
-getRedirectResult(auth).catch(e => {
-  const m = document.getElementById("tMsg");
-  m.textContent = "ログインに失敗しました\n" + (e.code ? e.code + "\n" : "") + e.message; m.className = "msg ng";
-});
-onAuthStateChanged(auth, u => window.__onUser && window.__onUser(u));
+// 保存機能に接続（つながるまでメニューは出さない）
+const fail = t => window.__onFail(t);
+const errText = e => { if (!e) return "不明なエラー"; const c = e.code || e.name || ""; return (c ? c + " / " : "") + (e.message || String(e)); };
+if (!window.claude || typeof window.claude.use !== "function") {
+  fail("保存機能につながっていません。claude.ai のページとして開いてください。");
+  return;
+}
+Promise.all([window.claude.use("db"), window.claude.use("user")]).then(async ([db, user]) => {
+  if (!db) { fail("保存機能が使えません。一度ブラウザで claude.ai を開いてログインし直してから、もう一度開いてください。"); return; }
+  const id = user ? await user.id() : null;
+  if (!id) { fail("あなた専用の保存場所が見つかりません。claude.ai にログインしてから開き直してください。"); return; }
+  ref = db.doc("data/users/" + id + "/profile");
+  window.__onReady();
+}).catch(e => fail("保存機能の準備に失敗しました\n" + errText(e)));
+})();
 </script>
-</body>
-</html>
