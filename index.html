@@ -88,8 +88,8 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     ・サイコロや強化ボタンを長押しすると、能力の説明が出ます<br>
     ・下のボタンで、種類ごとに試合中だけ強化できます<br>
     ・敵が道の出口まで行くとハートが減ります。10ウェーブごとにボスが出ます<br>
-    ・試合が終わると「到達ウェーブ×10」ゴールドがもらえます。途中でやめても、そこまでの分はもらえます<br>
-    ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv10）
+    ・試合が終わると「越えたウェーブ×10」ゴールド、ボスを倒すとさらに50ゴールドもらえます。途中でやめても、そこまでの分はもらえます<br>
+    ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv5）
   </div>
 </div></section>
 
@@ -110,7 +110,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <div class="card goldbar"><span>所持ゴールド</span><span><b id="dGold">0</b> G</span></div>
   <div id="dMsg" class="msg"></div>
   <div class="dlist" id="dList"></div>
-  <div class="card help">レベルが1上がるごとに攻撃+10%（最大Lv10）。相棒も同じレベルで戦います。<br>必要なもの：かけら「今のLv」個 ＋ ゴールド「今のLv×50」</div>
+  <div class="card help">レベルが1上がるごとに攻撃+10%（最大Lv5）。相棒も同じレベルで戦います。<br>必要なもの：かけら「今のLv×2」個 ＋ ゴールド「今のLv×50」</div>
   <button class="btn sec" id="bDiceBack">もどる</button>
 </div></section>
 
@@ -839,7 +839,8 @@ document.getElementById('bPull').onclick=()=>{
 };
 
 // ====== サイコロ（レベルアップ） ======
-const lvCost=l=>({sh:l,gold:l*50});
+const MAX_LV=5;
+const lvCost=l=>({sh:l*2,gold:l*50}); // Lv1→2: かけら2・50G … Lv4→5: かけら8・200G
 document.getElementById('bDice').onclick=()=>{msg('dMsg','');renderDice();screen('scDice');};
 document.getElementById('bDiceBack').onclick=()=>{screen('scTitle');renderMenu();};
 function renderDice(busy){
@@ -848,7 +849,7 @@ function renderDice(busy){
     const d=DICE[t],x=profile.dice[t];const el=document.createElement('div');
     if(!x){el.className='ditem lock';el.innerHTML='<div class="sw" style="background:'+d.c+'"></div><div class="nm">'+d.n+'<small>'+d.r+'・未所持</small></div>';box.appendChild(el);continue;}
     el.className='ditem';
-    const c=lvCost(x.lv),max=x.lv>=10;
+    const c=lvCost(x.lv),max=x.lv>=MAX_LV;
     el.innerHTML='<div class="sw" style="background:'+d.c+'"></div><div class="nm">'+d.n+'　Lv'+x.lv+'<small>'+d.r+'・かけら '+x.sh+(max?'':' / '+c.sh)+'</small></div>';
     const b=document.createElement('button');b.className='btn';
     b.innerHTML=max?'最大':'レベルアップ<small>'+c.gold+'G</small>';
@@ -918,10 +919,10 @@ function commit(change) {
   return job;
 }
 
-// 試合の報酬を確定（到達ウェーブ×10G）
+// 試合の報酬を確定（越えたウェーブ×10G ＋ 倒したボス1体ごとに50G）
 function settle(n) {
   if (!n.match) return null;
-  const wave = n.match.wave || 0, gold = wave * 10;
+  const wave = n.match.wave || 0, gold = wave * 10 + Math.floor(wave / 10) * 50;
   n.gold += gold; n.plays += 1; n.best = Math.max(n.best, wave); n.match = null;
   return { wave, gold };
 }
@@ -965,10 +966,10 @@ window.Cloud = {
     return commit(n => {
       const d = n.dice[type];
       if (!d) throw new Error("このサイコロはまだ持っていません");
-      if (d.lv >= 10) throw new Error("すでに最大レベルです");
-      if (d.sh < d.lv) throw new Error("かけらが足りません");
+      if (d.lv >= 5) throw new Error("すでに最大レベルです");
+      if (d.sh < d.lv * 2) throw new Error("かけらが足りません");
       if (n.gold < d.lv * 50) throw new Error("ゴールドが足りません");
-      n.gold -= d.lv * 50; d.sh -= d.lv; d.lv += 1;
+      n.gold -= d.lv * 50; d.sh -= d.lv * 2; d.lv += 1;
       return { lv: d.lv };
     });
   },
