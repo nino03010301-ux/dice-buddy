@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="保存テスト">
+<meta name="theme-color" content="#14162b">
+<title>保存テスト</title>
+<style>
+:root{
+  --bg:#14162b; --panel:#1f2240; --panel2:#2a2e55; --text:#f2f3ff; --muted:#a3a7d1;
+  --accent:#ffcc4d; --good:#5be38a; --bad:#ff6b6b; --line:#3a3f73;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+body{padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+.inner{width:100%;max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:26px;margin:12px 0 0;text-align:center}
+.sub{color:var(--muted);text-align:center;font-size:14px;margin:0}
+.card{background:var(--panel);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.btn{appearance:none;border:0;border-radius:14px;padding:14px;font-size:17px;font-weight:700;
+  background:var(--accent);color:#2a1d00;cursor:pointer;width:100%}
+.btn.sec{background:var(--panel2);color:var(--text)}
+.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px;align-items:center}
+.row .btn{flex:1}
+.gold{font-size:40px;font-weight:800;text-align:center;color:var(--accent)}
+input{width:100%;font-size:16px;padding:12px;border-radius:10px;border:2px solid var(--line);background:var(--panel2);color:var(--text)}
+.msg{border-radius:12px;padding:12px;font-size:15px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+.msg.ok{background:#1d4a31;color:var(--good)}
+.msg.ng{background:#4a1d26;color:var(--bad)}
+.msg.info{background:var(--panel2);color:var(--muted)}
+.small{font-size:13px;color:var(--muted);line-height:1.6}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="inner">
+  <h1>保存テスト</h1>
+  <p class="sub">ダイスバディのデータ保存を試すページです</p>
+
+  <div id="msg" class="msg info">読み込み中…</div>
+
+  <div id="loginCard" class="card hide">
+    <button id="loginBtn" class="btn">Googleでログイン</button>
+    <button id="redirectBtn" class="btn sec hide">うまくいかないときはこちら（別の方法でログイン）</button>
+  </div>
+
+  <div id="mainCard" class="card hide">
+    <div class="small" id="who"></div>
+    <div class="gold"><span id="gold">0</span> G</div>
+    <div class="row">
+      <button class="btn sec" data-add="-100">−100</button>
+      <button class="btn sec" data-add="100">＋100</button>
+      <button class="btn sec" data-add="1000">＋1000</button>
+    </div>
+    <input id="note" maxlength="40" placeholder="ひとことメモ（なんでもOK）">
+    <button id="saveBtn" class="btn">保存する</button>
+    <div class="small" id="last"></div>
+    <button id="reloadBtn" class="btn sec">ネットから読み直す</button>
+    <button id="logoutBtn" class="btn sec">ログアウト</button>
+  </div>
+
+  <div class="card small">
+    試し方<br>
+    1. ログインして、ゴールドを増やして「保存する」<br>
+    2. アプリを完全に終了して、もう一度開く<br>
+    3. 同じ数字が出ていれば成功。PCで開いても同じ数字になるか確認
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDocFromServer, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+// Firebase のWeb用設定（公開して問題ない値。データの守りは Firestore のルール側で行う）
+const firebaseConfig = {
+  apiKey: "AIzaSyBJ6iBd3rC5fY7yjXaXwjOg9p6y4qGCAZM",
+  authDomain: "dice-buddy.firebaseapp.com",
+  projectId: "dice-buddy",
+  storageBucket: "dice-buddy.firebasestorage.app",
+  messagingSenderId: "289241985349",
+  appId: "1:289241985349:web:295f453b69f915accd4e2c"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+const $ = id => document.getElementById(id);
+let user = null;
+let saved = { gold: 0, note: "" };   // ネット上で確認できた最新の値
+let draft = { gold: 0, note: "" };   // 画面で編集中の値
+let busy = false;
+
+function device(){
+  const ua = navigator.userAgent;
+  const kind = /iPhone|iPad|iPod/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Android" : "PC";
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  return kind + (standalone ? "（ホーム画面）" : "（ブラウザ）");
+}
+function show(text, kind){ const m = $("msg"); m.textContent = text; m.className = "msg " + kind; }
+function errText(e){ return (e && (e.code || e.name) ? (e.code || e.name) + "\n" : "") + (e && e.message ? e.message : String(e)); }
+function render(){
+  $("gold").textContent = draft.gold;
+  if (document.activeElement !== $("note")) $("note").value = draft.note;
+  for (const b of document.querySelectorAll("button")) if (b.id !== "logoutBtn") b.disabled = busy;
+}
+function fmt(ts){
+  if (!ts || !ts.toDate) return "";
+  const d = ts.toDate();
+  return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function ref(){ return doc(db, "users", user.uid); }
+
+async function load(){
+  busy = true; render();
+  show("ネットから読み込み中…", "info");
+  try {
+    const snap = await getDocFromServer(ref());
+    if (snap.exists()) {
+      const d = snap.data();
+      saved = { gold: d.gold ?? 0, note: d.note ?? "" };
+      $("last").textContent = `最後に保存：${fmt(d.updatedAt)}　${d.device || ""}`;
+      show("ネットから読み込みました", "ok");
+    } else {
+      saved = { gold: 0, note: "" };
+      $("last").textContent = "まだ保存したことがありません";
+      show("はじめてのログインです。保存してみてください", "info");
+    }
+    draft = { ...saved };
+  } catch (e) {
+    show("読み込みに失敗しました\n" + errText(e), "ng");
+  }
+  busy = false; render();
+}
+
+async function save(){
+  busy = true; render();
+  show("保存中…", "info");
+  const want = { gold: draft.gold, note: $("note").value };
+  try {
+    await setDoc(ref(), { ...want, device: device(), updatedAt: serverTimestamp() });
+    // 保存したら必ずネットから読み直して、一致したときだけ成功にする
+    const snap = await getDocFromServer(ref());
+    const d = snap.exists() ? snap.data() : null;
+    if (!d || d.gold !== want.gold || d.note !== want.note) {
+      throw new Error("保存後に読み直した内容が一致しませんでした");
+    }
+    saved = { gold: d.gold, note: d.note };
+    draft = { ...saved };
+    $("last").textContent = `最後に保存：${fmt(d.updatedAt)}　${d.device || ""}`;
+    show("保存しました", "ok");
+  } catch (e) {
+    draft = { ...saved };   // 失敗したら画面を元に戻す
+    show("保存に失敗しました（画面は元に戻しました）\n" + errText(e), "ng");
+  }
+  busy = false; render();
+}
+
+async function login(){
+  show("ログイン中…", "info");
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    show("ログインに失敗しました\n" + errText(e), "ng");
+    $("redirectBtn").classList.remove("hide");
+  }
+}
+
+$("loginBtn").onclick = login;
+$("redirectBtn").onclick = () => { show("Googleのページへ移動します…", "info"); signInWithRedirect(auth, provider).catch(e => show("ログインに失敗しました\n" + errText(e), "ng")); };
+$("logoutBtn").onclick = () => signOut(auth);
+$("saveBtn").onclick = save;
+$("reloadBtn").onclick = load;
+$("note").oninput = () => { draft.note = $("note").value; };
+for (const b of document.querySelectorAll("[data-add]")) {
+  b.onclick = () => { draft.gold = Math.max(0, draft.gold + Number(b.dataset.add)); render(); };
+}
+
+getRedirectResult(auth).catch(e => show("ログインに失敗しました\n" + errText(e), "ng"));
+
+onAuthStateChanged(auth, u => {
+  user = u;
+  $("loginCard").classList.toggle("hide", !!u);
+  $("mainCard").classList.toggle("hide", !u);
+  if (u) {
+    $("who").textContent = `ログイン中：${u.displayName || ""}（${u.email || ""}）／この端末：${device()}`;
+    load();
+  } else {
+    show("Googleでログインしてください", "info");
+  }
+});
+</script>
+</body>
+</html>
