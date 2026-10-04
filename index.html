@@ -54,6 +54,14 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 .msg.info{background:var(--panel2);color:var(--muted)}
 .goldbar{display:flex;flex-direction:row;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted)}
 .goldbar b{font-size:22px;color:var(--accent)}
+.goal{gap:2px;text-align:center;font-size:13px;color:var(--muted)}
+.goal b{font-size:20px;color:var(--text)}
+.goal small{font-size:12px}
+.stsel{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
+.stsel .btn{width:56px;padding:10px 0;font-size:18px;flex:none}
+.stsel .mid{flex:1;text-align:center}
+.stsel .mid b{display:block;font-size:22px}
+.stsel .mid small{font-size:12px;color:var(--muted)}
 .link{appearance:none;border:0;background:none;color:var(--muted);font-size:13px;text-decoration:underline;padding:4px;cursor:pointer}
 .dlist{display:flex;flex-direction:column;gap:8px}
 .ditem{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:12px;padding:10px}
@@ -78,6 +86,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <div id="tMsg" class="msg info">保存機能に接続しています…</div>
   <div id="menuArea" style="display:none;flex-direction:column;gap:14px">
     <div class="card goldbar"><span>所持ゴールド</span><span><b id="tGold">0</b> G</span></div>
+    <div class="card goal"><span>次の目標</span><b id="tGoal">ステージ 1 クリア</b><small id="tCleared">まだクリアしたステージはありません</small></div>
     <button class="btn" id="bBot">相棒と遊ぶ</button>
     <div class="row"><button class="btn sec" id="bGacha" style="font-size:16px;padding:14px">ガチャ</button><button class="btn sec" id="bDice" style="font-size:16px;padding:14px">サイコロ</button></div>
   </div>
@@ -87,8 +96,9 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     ・同じ種類・同じ目のサイコロを指で重ねると合体。目が1つ増えて、種類はランダムに変わります（最大7）<br>
     ・サイコロや強化ボタンを長押しすると、能力の説明が出ます<br>
     ・下のボタンで、種類ごとに試合中だけ強化できます<br>
-    ・敵が道の出口まで行くとハートが減ります。10ウェーブごとにボスが出ます<br>
-    ・試合が終わると「越えたウェーブ×10」ゴールド、ボスを倒すとさらに50ゴールドもらえます。途中でやめても、そこまでの分はもらえます<br>
+    ・敵が道の出口まで行くとハートが減ります<br>
+    ・1ステージは10ウェーブ。ウェーブ10のボスを倒すとクリアで、次のステージ（敵が強い）が遊べるようになります<br>
+    ・試合が終わると「越えたウェーブ×10」ゴールド、ボスを倒すとさらに50ゴールド、初めてクリアしたステージは+100ゴールドもらえます。途中でやめても、そこまでの分はもらえます<br>
     ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv5）
   </div>
 </div></section>
@@ -117,6 +127,11 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 <!-- デッキ選択 -->
 <section class="screen" id="scDeck"><div class="inner">
   <h2>出撃の準備</h2>
+  <div class="card stsel">
+    <button class="btn sec" id="stPrev">◀</button>
+    <div class="mid"><b id="stName">ステージ 1</b><small id="stInfo"></small></div>
+    <button class="btn sec" id="stNext">▶</button>
+  </div>
   <div class="card">
     <label style="font-size:14px">相棒の名前</label>
     <input type="text" id="botName" maxlength="10" value="ダイスケ">
@@ -142,13 +157,14 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 
 <!-- ゲームオーバー -->
 <div class="overlay" id="ovOver"><div class="modal">
-  <h3>試合終了</h3>
-  <div>到達ウェーブ</div>
+  <h3 id="oTitle">試合終了</h3>
+  <div>越えたウェーブ</div>
   <div class="big" id="oWave">0</div>
   <div id="oBest" style="color:var(--muted);font-size:14px"></div>
   <div id="oLine" style="font-size:15px"></div>
   <div id="oMsg" class="msg"></div>
   <button class="btn sec" id="bRetry" style="display:none">もう一度保存する</button>
+  <button class="btn" id="bNextSt" style="display:none">次のステージへ</button>
   <button class="btn" id="bAgain">もう一度</button>
   <button class="btn sec" id="bToTitle">タイトルへ</button>
 </div></div>
@@ -214,6 +230,7 @@ const LINES={
  milestone:['ウェーブ{w}突破！いい調子！','ウェーブ{w}！この調子でいこう！'],
  stun:['うわ、サイコロが止められた！','ボスの技だ！少し待って！'],
  record:['記録更新！すごいよ！'],
+ clear:['ステージクリア！最高のコンビだね！','やった、クリアだ！次のステージも一緒に行こう！'],
  over:['くやしい…次はもっと先へ行こう！','おつかれさま！次こそ記録更新だ！'],
 };
 const pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -246,8 +263,8 @@ function newSide(deck){
   const lvl={},cls={};deck.forEach(t=>{lvl[t]=1;cls[t]=dieLv(t);});
   return{dice:new Array(15).fill(null),sp:100,summons:0,deck:deck.slice(),lvl,cls};
 }
-function newGame(){
-  G={me:newSide(decks.me),bot:newSide(decks.bot),enemies:[],bullets:[],fx:[],
+function newGame(stage){
+  G={stage:stage||1,me:newSide(decks.me),bot:newSide(decks.bot),enemies:[],bullets:[],fx:[],
     wave:0,lives:3,spawnQ:[],spawnT:0,breakT:1.5,running:true,paused:false,over:false,
     time:0,botT:1.2,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,meteorT:{},
     parts:[],texts:[],meteors:[],shake:0,flash:0};
@@ -323,7 +340,9 @@ function powerUp(side,t){
 }
 
 // ====== ウェーブ ======
-function enemyHP(w){return Math.round(280*Math.pow(1.115,w-1)+w*20);}
+const STAGE_WAVES=10,STAGE_MUL=1.7;
+const stageMul=st=>Math.pow(STAGE_MUL,(st||1)-1);
+function enemyHP(w){return Math.round((280*Math.pow(1.115,w-1)+w*20)*stageMul(G.stage));}
 function startWave(){
   G.wave++;const w=G.wave;
   const n=Math.min(8+w,26);const q=[];
@@ -405,7 +424,7 @@ function applyHit(b){
     for(const o of others){damage(o,dmg*0.7);G.fx.push({k:'zap',x:e.x,y:e.y,x2:o.x,y2:o.y,t:0.18});}
     burst(e.x,e.y,'#fff27a',4,{spd:90,life:0.2,size:2});}
   if(b.type==='ice'){e.slow=Math.min(0.5,Math.max(e.slow,0.18+0.04*b.pip));e.slowT=2;}
-  if(b.type==='poison'){e.poison=Math.max(e.poison,10*b.pip*lv(s,'poison')*Math.pow(1.1,G.wave/2));e.poisonT=3;}
+  if(b.type==='poison'){e.poison=Math.max(e.poison,10*b.pip*lv(s,'poison')*Math.pow(1.1,G.wave/2)*stageMul(G.stage));e.poisonT=3;}
 }
 function update(dt){
   if(!G||!G.running||G.paused||G.over)return;
@@ -414,6 +433,7 @@ function update(dt){
   if(G.breakT>0){G.breakT-=dt;if(G.breakT<=0)startWave();}
   else{
     if(G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){spawnEnemy(G.spawnQ.shift());G.spawnT=G.spawnInt;}}
+    else if(!G.enemies.length&&G.wave>=STAGE_WAVES){gameOver(true);return;} // ステージクリア
     else if(!G.enemies.length){ // ウェーブクリア
       const bonus=20+G.wave*10;G.me.sp+=bonus;G.bot.sp+=bonus;G.breakT=2;
     }
@@ -554,30 +574,35 @@ function bestPower(s,weakPartner){
 }
 
 // ====== ゲーム終了 ======
-function gameOver(){
-  G.over=true;G.running=false;
-  const w=Math.max(0,G.wave-1);
-  const rec=w>session.best;
-  if(rec)session.best=w;
-  document.getElementById('oWave').textContent=w;
-  document.getElementById('oBest').textContent=rec&&session.plays>1?'記録更新！':'今日の最高：ウェーブ'+session.best;
-  document.getElementById('oLine').textContent=botName+'「'+(rec&&session.plays>1?pick(LINES.record):pick(LINES.over))+'」';
+function gameOver(clear){
+  clear=clear===true;
+  G.over=true;G.running=false;G.drag=null;G.hold=null;
+  const w=clear?STAGE_WAVES:Math.max(0,G.wave-1);
+  if(w>session.best)session.best=w;
+  document.getElementById('oTitle').textContent='ステージ '+G.stage+(clear?' クリア！':' 失敗…');
+  document.getElementById('oTitle').style.color=clear?'var(--accent)':'';
+  document.getElementById('oWave').textContent=w+' / '+STAGE_WAVES;
+  document.getElementById('oBest').textContent=clear?'':'あと '+(STAGE_WAVES-w)+' ウェーブでクリア！';
+  document.getElementById('oLine').textContent=botName+'「'+pick(clear?LINES.clear:LINES.over)+'」';
+  document.getElementById('bNextSt').style.display=clear?'':'none';
+  document.getElementById('bAgain').className=clear?'btn sec':'btn';
+  stageSel=G.stage;
   show('ovOver',true);
   settleMatch(G.matchId,w);
 }
 // 試合の報酬を保存。保存を確認できるまで次へ進めない
 function settleMatch(id,w){
-  const b1=document.getElementById('bAgain'),b2=document.getElementById('bToTitle'),br=document.getElementById('bRetry');
-  b1.disabled=b2.disabled=true;br.style.display='none';
+  const b1=document.getElementById('bAgain'),b2=document.getElementById('bToTitle'),br=document.getElementById('bRetry'),b3=document.getElementById('bNextSt');
+  b1.disabled=b2.disabled=b3.disabled=true;br.style.display='none';
   msg('oMsg','報酬を保存中…','info');
   Cloud().finish(id,w).then(({profile:p,result:r})=>{
     setProfile(p);
-    msg('oMsg',r?'+'+r.gold+'G を受け取りました（所持 '+p.gold+'G）':'この試合の報酬は受け取り済みです（所持 '+p.gold+'G）','ok');
-    b1.disabled=b2.disabled=false;
+    msg('oMsg',r?'+'+r.gold+'G を受け取りました'+(r.first?'（初クリアボーナス 100G 込み）':'')+'（所持 '+p.gold+'G）':'この試合の報酬は受け取り済みです（所持 '+p.gold+'G）','ok');
+    b1.disabled=b2.disabled=b3.disabled=false;
   }).catch(e=>{
     msg('oMsg','報酬の保存に失敗しました\n'+errText(e)+'\n（次にゲームを開いたときにも受け取れます）','ng');
     br.style.display='';br.onclick=()=>settleMatch(id,w);
-    b1.disabled=b2.disabled=false;
+    b1.disabled=b2.disabled=false;b3.disabled=true; // 次のステージはクリアの保存ができてから
   });
 }
 
@@ -624,8 +649,9 @@ function draw(){
   if(G.shake>0){const k=Math.min(1,G.shake*4)*4;ctx.translate((Math.random()-0.5)*k,(Math.random()-0.5)*k);}
   // ヘッダー
   ctx.fillStyle='#f2f3ff';ctx.font='bold 18px sans-serif';ctx.textAlign='left';
-  ctx.fillText('ウェーブ '+Math.max(1,G.wave),14,29);
-  for(let i=0;i<3;i++){ctx.fillStyle=i<G.lives?'#ff6b6b':'#3a3f73';heart(150+i*24,20,9);}
+  ctx.fillStyle='#ffcc4d';ctx.font='bold 12px sans-serif';ctx.fillText('ステージ '+G.stage,14,16);
+  ctx.fillStyle='#f2f3ff';ctx.font='bold 17px sans-serif';ctx.fillText('ウェーブ '+Math.max(1,G.wave)+' / '+STAGE_WAVES,14,36);
+  for(let i=0;i<3;i++){ctx.fillStyle=i<G.lives?'#ff6b6b':'#3a3f73';heart(186+i*24,22,9);}
   ctx.fillStyle='#2a2e55';rr(W-54,8,44,30,9);ctx.fill();
   ctx.fillStyle='#f2f3ff';ctx.fillRect(W-38,15,5,16);ctx.fillRect(W-29,15,5,16);
   // 相棒ライン
@@ -862,9 +888,20 @@ const SCREENS=['scTitle','scDeck','scGacha','scDice'];
 function screen(id){SCREENS.forEach(s=>show(s,s===id));}
 document.getElementById('bBot').onclick=()=>{
   decks.me=decks.me.filter(owned);if(decks.bot)decks.bot=decks.bot.filter(owned);
-  msg('sMsg','');screen('scDeck');renderDeck();
+  msg('sMsg','');screen('scDeck');renderDeck();renderStage();
 };
-document.getElementById('bBack').onclick=()=>screen('scTitle');
+document.getElementById('bBack').onclick=()=>{screen('scTitle');renderMenu();};
+let stageSel=1;
+const clearedSt=()=>(profile&&profile.cleared)||0;
+function renderStage(){
+  const max=clearedSt()+1;stageSel=Math.min(Math.max(1,stageSel),max);
+  document.getElementById('stName').textContent='ステージ '+stageSel;
+  document.getElementById('stInfo').textContent=(stageSel<=clearedSt()?'クリア済み':'まだクリアしていません')+'・敵の体力 ×'+(Math.round(stageMul(stageSel)*10)/10);
+  document.getElementById('stPrev').disabled=stageSel<=1;
+  document.getElementById('stNext').disabled=stageSel>=max;
+}
+document.getElementById('stPrev').onclick=()=>{stageSel--;renderStage();};
+document.getElementById('stNext').onclick=()=>{stageSel++;renderStage();};
 let tab='me';
 document.getElementById('tMe').onclick=()=>{tab='me';renderDeck();};
 document.getElementById('tBot').onclick=()=>{tab='bot';renderDeck();};
@@ -873,6 +910,7 @@ function autoDeck(base){ // 自分のデッキを補う組み合わせ
   const wantSupport=!have.has('ice')?['ice']:[];
   const prefs=[...wantSupport,'iron','snipe','fire','elec','meteor','wind','poison','light','crit','joker','grow'].filter(owned);
   for(const t of prefs){if(pick5.length>=5)break;if(!pick5.includes(t))pick5.push(t);}
+  for(const t of ALL){if(pick5.length>=5)break;if(owned(t)&&!pick5.includes(t))pick5.push(t);} // 足りなければ持っているもので埋める
   return pick5;
 }
 document.getElementById('bAuto').onclick=()=>{
@@ -914,14 +952,16 @@ document.getElementById('bStart').onclick=()=>{
   startMatch('sMsg','bStart',()=>SCREENS.forEach(s=>show(s,false)));
 };
 document.getElementById('bAgain').onclick=()=>startMatch('oMsg','bAgain',()=>show('ovOver',false));
+document.getElementById('bNextSt').onclick=()=>{stageSel=G.stage+1;startMatch('oMsg','bNextSt',()=>show('ovOver',false));};
 document.getElementById('bToTitle').onclick=()=>{show('ovOver',false);G=null;screen('scTitle');renderMenu();};
 // 試合を始める前に「試合中」をネットに記録（途中で閉じても報酬を受け取れるように）
 function startMatch(msgId,btnId,onReady){
   const btn=document.getElementById(btnId);btn.disabled=true;
   msg(msgId,'準備中…','info');
-  Cloud().startMatch({deckMe:decks.me.slice(),deckBot:decks.bot.slice(),botName}).then(({profile:p,result:r})=>{
+  const st=stageSel;
+  Cloud().startMatch({deckMe:decks.me.slice(),deckBot:decks.bot.slice(),botName,stage:st}).then(({profile:p,result:r})=>{
     setProfile(p);btn.disabled=false;msg(msgId,'');
-    onReady();newGame();G.matchId=r.id;last=performance.now();
+    onReady();newGame(st);G.matchId=r.id;last=performance.now();
     if(r.left)say('前回の試合の報酬 +'+r.left.gold+'G も受け取ったよ！',3);
   }).catch(e=>{
     btn.disabled=false;msg(msgId,'試合を始められませんでした\n'+errText(e),'ng');
@@ -943,6 +983,10 @@ let first=true;
 // 保存機能につながって読み込めたときだけメニュー（試合・ガチャ・サイコロ）を出す
 function renderMenu(){
   document.getElementById('menuArea').style.display=profile?'flex':'none';
+  if(!profile)return;
+  const c=clearedSt();
+  document.getElementById('tGoal').textContent='ステージ '+(c+1)+' クリア';
+  document.getElementById('tCleared').textContent=c?'ステージ '+c+' までクリア済み':'まだクリアしたステージはありません';
 }
 window.__onReady=()=>{
   profile=null;renderMenu();
@@ -954,6 +998,7 @@ window.__onReady=()=>{
       if(p.deckMe)decks.me=p.deckMe.filter(owned);
       if(p.deckBot)decks.bot=p.deckBot.filter(owned);
       if(p.botName){botName=p.botName;document.getElementById('botName').value=p.botName;}
+      stageSel=(p.cleared||0)+1; // はじめは、まだクリアしていないステージを選んでおく
     }
     msg('tMsg',r.left?'前回の試合（ウェーブ'+r.left.wave+'）の報酬 +'+r.left.gold+'G を受け取りました':'',r.left?'ok':'');
     renderMenu();
@@ -1032,13 +1077,15 @@ window.__dice={get G(){return G;},update,newGame,decks,summon,merge,botAct,sessi
 const GACHA_COST = 100;
 const RATES = [["ノーマル", 60], ["レア", 28], ["エピック", 10], ["伝説", 2]];
 const START_DICE = ["fire", "elec", "wind", "poison", "ice"];
-const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match"];
+const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match", "cleared"];
+const STAGE_WAVES = 10, FIRST_CLEAR_BONUS = 100;
 
 // 保存データ data/users/<自分のid>/profile（自分専用・ほかの人からは見えない）
-//  gold, dice:{種類:{lv,sh(かけら)}}, plays, best, botName, deckMe, deckBot, match:{id,wave}|null
+//  gold, dice:{種類:{lv,sh(かけら)}}, plays, best, botName, deckMe, deckBot, match:{id,wave,stage}|null,
+//  cleared（クリアした一番大きいステージ。0＝まだ）
 function fresh() {
   const dice = {}; START_DICE.forEach(t => dice[t] = { lv: 1, sh: 0 });
-  return { gold: 300, dice, plays: 0, best: 0, botName: "ダイスケ", deckMe: START_DICE.slice(), deckBot: null, match: null };
+  return { gold: 300, dice, plays: 0, best: 0, botName: "ダイスケ", deckMe: START_DICE.slice(), deckBot: null, match: null, cleared: 0 };
 }
 const only = d => { const o = {}; for (const k of KEYS) o[k] = d[k] ?? null; return o; };
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -1068,33 +1115,36 @@ function commit(change) {
   return job;
 }
 
-// 試合の報酬を確定（越えたウェーブ×10G ＋ 倒したボス1体ごとに50G）
+// 試合の報酬を確定（越えたウェーブ×10G ＋ 倒したボス1体ごとに50G ＋ 初クリアなら100G）
 function settle(n) {
   if (!n.match) return null;
-  const wave = n.match.wave || 0, gold = wave * 10 + Math.floor(wave / 10) * 50;
+  const wave = n.match.wave || 0, stage = n.match.stage || 1;
+  let gold = wave * 10 + Math.floor(wave / 10) * 50, first = false;
+  if (wave >= STAGE_WAVES && stage > (n.cleared || 0)) { n.cleared = stage; gold += FIRST_CLEAR_BONUS; first = true; }
   n.gold += gold; n.plays += 1; n.best = Math.max(n.best, wave); n.match = null;
-  return { wave, gold };
+  return { wave, gold, stage, first };
 }
 
 window.Cloud = {
   // 読み込み（はじめての人はデータを作る。前回途中で閉じた試合があれば報酬を確定）
   load() { return commit(n => ({ left: settle(n) })); },
-  startMatch({ deckMe, deckBot, botName }) {
+  startMatch({ deckMe, deckBot, botName, stage }) {
     return commit(n => {
       const left = settle(n);
+      if (!(stage >= 1 && stage <= (n.cleared || 0) + 1)) throw new Error("このステージはまだ遊べません（ひとつ前のステージをクリアしよう）");
       n.deckMe = deckMe; n.deckBot = deckBot; n.botName = botName;
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      n.match = { id, wave: 0 };
+      n.match = { id, wave: 0, stage };
       return { id, left };
     });
   },
   progress(id, wave) {
-    return commit(n => { if (n.match && n.match.id === id && wave > n.match.wave) n.match.wave = wave; });
+    return commit(n => { if (n.match && n.match.id === id && wave > n.match.wave) n.match.wave = Math.min(wave, STAGE_WAVES); });
   },
   finish(id, wave) {
     return commit(n => {
       if (!n.match || n.match.id !== id) return null; // すでに受け取り済み
-      n.match.wave = Math.max(n.match.wave, wave);
+      n.match.wave = Math.min(Math.max(n.match.wave, wave), STAGE_WAVES);
       return settle(n);
     });
   },
