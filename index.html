@@ -905,22 +905,35 @@ document.getElementById('stNext').onclick=()=>{stageSel++;renderStage();};
 let tab='me';
 document.getElementById('tMe').onclick=()=>{tab='me';renderDeck();};
 document.getElementById('tBot').onclick=()=>{tab='bot';renderDeck();};
-function autoDeck(base){ // 自分のデッキを補う組み合わせ
-  const have=new Set(base);const pick5=[];
-  const wantSupport=!have.has('ice')?['ice']:[];
-  const prefs=[...wantSupport,'iron','snipe','fire','elec','meteor','wind','poison','light','crit','joker','grow'].filter(owned);
-  for(const t of prefs){if(pick5.length>=5)break;if(!pick5.includes(t))pick5.push(t);}
-  for(const t of ALL){if(pick5.length>=5)break;if(owned(t)&&!pick5.includes(t))pick5.push(t);} // 足りなければ持っているもので埋める
-  return pick5;
+// おまかせ：毎回少しずつ違う組み合わせを、持っているサイコロから選ぶ
+const AUTO_DMG=['fire','elec','wind','iron','snipe','meteor','poison','joker'];
+const AUTO_RW={'ノーマル':1,'レア':1.3,'エピック':1.5,'伝説':1.8};
+function autoWeight(t,avoid){let w=(1+0.4*(dieLv(t)-1))*(AUTO_RW[DICE[t].r]||1);if(avoid&&avoid.has(t))w*=0.25;return w;}
+function pickWeighted(pool,avoid){let sum=0;for(const t of pool)sum+=autoWeight(t,avoid);let r=Math.random()*sum;for(const t of pool){r-=autoWeight(t,avoid);if(r<=0)return t;}return pool[pool.length-1];}
+function rollDeck(base){ // base があるときは、そのデッキを補う（相棒用）
+  const have=new Set(base||[]);const own=ALL.filter(owned);const pick=[];
+  const add=t=>{if(t&&!pick.includes(t)&&pick.length<5)pick.push(t);};
+  // 足止め役：自分用は半分くらいの確率、相棒用は自分に氷がなければ必ず入れる
+  if(owned('ice')&&(base?!have.has('ice'):Math.random()<0.5))add('ice');
+  // 火力役を2つ以上
+  const dmg=own.filter(t=>AUTO_DMG.includes(t));
+  while(pick.filter(t=>AUTO_DMG.includes(t)).length<2){const left=dmg.filter(t=>!pick.includes(t));if(!left.length)break;add(pickWeighted(left,base?have:null));}
+  // 残りは自由に
+  while(pick.length<5){const left=own.filter(t=>!pick.includes(t));if(!left.length)break;add(pickWeighted(left,base?have:null));}
+  return pick;
+}
+const sameDeck=(a,b)=>a&&b&&a.length===b.length&&a.every(t=>b.includes(t));
+function autoDeck(base,current){ // 今と違う組み合わせになるまで数回引き直す
+  let d=rollDeck(base);
+  for(let i=0;i<20&&sameDeck(d,current);i++)d=rollDeck(base);
+  return d;
 }
 document.getElementById('bAuto').onclick=()=>{
-  if(tab==='bot')decks.bot=autoDeck(decks.me);
-  else{ // 強い順に、持っているサイコロから選ぶ
-    const prefs=['ice','iron','snipe','fire','elec','meteor','wind','crit','light','joker','grow','poison'].filter(owned);
-    prefs.sort((a,b)=>dieLv(b)-dieLv(a));
-    decks.me=prefs.slice(0,5);
-  }
+  if(tab==='bot')decks.bot=autoDeck(decks.me,decks.bot);
+  else decks.me=autoDeck(null,decks.me);
   renderDeck();
+  const d=decks[tab];
+  document.getElementById('dieDesc').textContent='おまかせで選びました：'+d.map(t=>DICE[t].n).join('・')+(ALL.filter(owned).length<=5?'（持っているサイコロが5種類なので、組み合わせはこれだけです）':'');
 };
 function curDeck(){if(tab==='bot'&&!decks.bot)decks.bot=autoDeck(decks.me);return decks[tab];}
 function renderDeck(){
