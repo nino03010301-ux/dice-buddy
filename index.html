@@ -6,10 +6,13 @@
   --accent:#ffcc4d; --good:#5be38a; --bad:#ff6b6b; --line:#3a3f73;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+:root{padding:0!important}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
   overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
 #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+/* スマホ：Claudeアプリの上のバーが時計の分より高いので、そのぶん余白を足す */
+@media (pointer:coarse){#wrap{padding-top:calc(env(safe-area-inset-top,0px) + 28px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6px)}}
 canvas{display:block;touch-action:none}
 .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
   overflow-y:auto;touch-action:pan-y;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));background:var(--bg);z-index:5}
@@ -246,16 +249,27 @@ const cv=document.getElementById('cv');const ctx=cv.getContext('2d');
 let scale=1;
 function resize(){
   // iPhoneの上の時計・下のバーに隠れない範囲で大きさを決める
-  const wrap=document.getElementById('wrap');const cs=getComputedStyle(wrap);
-  const vw=wrap.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
-  const vh=wrap.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  // 実際に見えている範囲（visualViewport）に合わせる。ページがずれていたら上に戻す
+  if(window.scrollY||window.scrollX)window.scrollTo(0,0);
+  const wrap=document.getElementById('wrap');
+  const vv=window.visualViewport;
+  const fullH=Math.min(window.innerHeight,vv?vv.height:Infinity,document.documentElement.clientHeight||Infinity);
+  const fullW=Math.min(window.innerWidth,vv?vv.width:Infinity,document.documentElement.clientWidth||Infinity);
+  wrap.style.top=(vv?Math.max(0,vv.offsetTop):0)+'px';wrap.style.height=fullH+'px';wrap.style.bottom='auto';
+  const cs=getComputedStyle(wrap);
+  const vw=fullW-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+  const vh=fullH-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-8; // 上下に少しゆとり
   scale=Math.min(vw/W,vh/H);
   const dpr=Math.min(window.devicePixelRatio||1,2);
   cv.style.width=(W*scale)+'px';cv.style.height=(H*scale)+'px';
   cv.width=Math.round(W*scale*dpr);cv.height=Math.round(H*scale*dpr);
   ctx.setTransform(scale*dpr,0,0,scale*dpr,0,0);
 }
-window.addEventListener('resize',resize);resize();
+window.addEventListener('resize',resize);
+if(window.visualViewport){visualViewport.addEventListener('resize',resize);visualViewport.addEventListener('scroll',resize);}
+window.addEventListener('orientationchange',()=>setTimeout(resize,300));
+window.addEventListener('pageshow',resize);
+resize();setTimeout(resize,300);setTimeout(resize,1200);
 
 // ====== ゲーム状態 ======
 let G=null;
