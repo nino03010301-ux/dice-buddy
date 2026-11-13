@@ -78,6 +78,33 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 .gres .nm{font-size:22px;font-weight:800}
 .gres .tag{font-size:13px;color:var(--muted)}
 .gres .new{color:var(--accent);font-weight:800}
+/* ランク戦 */
+.btn.rk{background:linear-gradient(135deg,#7c5cff,#ff5fd2);color:#fff}
+.rkcard{flex-direction:row;align-items:center;gap:14px}
+.badge{width:64px;height:64px;border-radius:18px;flex:none;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;color:#14162b;box-shadow:0 0 18px #fff3}
+.badge.s{width:34px;height:34px;border-radius:10px;font-size:15px;box-shadow:none}
+.rkinfo{flex:1;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.rkinfo b{font-size:22px;color:var(--text)}
+.bar{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.grades{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;font-size:12px;color:var(--muted)}
+.grades b{display:block;font-size:26px;color:var(--text)}
+.spin{font-size:56px;animation:sp 1s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.vs{flex-direction:row;align-items:center;justify-content:space-between;text-align:center}
+.vs .side{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;color:var(--muted)}
+.vs .side b{font-size:16px;color:var(--text)}
+.vs .mid{font-size:26px;font-weight:900;color:var(--accent);padding:0 6px}
+.minideck{display:flex;gap:6px;justify-content:center}
+.minideck span{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.lb{display:flex;flex-direction:column;gap:4px;max-height:60vh;overflow-y:auto}
+.lbrow{display:flex;align-items:center;gap:8px;background:var(--panel2);border-radius:10px;padding:7px 10px;font-size:13px}
+.lbrow .no{width:38px;font-weight:800;color:var(--muted)}
+.lbrow .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.lbrow .pt{color:var(--muted)}
+.lbrow.me{background:#4a3d12;outline:2px solid var(--accent)}
+.lbsep{font-size:12px;color:#ff5fd2;text-align:center;padding:4px 0;font-weight:700}
+.delta{font-size:34px;font-weight:900}
 </style>
 <div id="wrap"><canvas id="cv"></canvas></div>
 
@@ -91,6 +118,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     <div class="card goldbar"><span>所持ゴールド</span><span><b id="tGold">0</b> G</span></div>
     <div class="card goal"><span>次の目標</span><b id="tGoal">ステージ 1 クリア</b><small id="tCleared">まだクリアしたステージはありません</small></div>
     <button class="btn" id="bBot">相棒と遊ぶ</button>
+    <button class="btn rk" id="bRank">ランク戦<small id="tRank"></small></button>
     <div class="row"><button class="btn sec" id="bGacha" style="font-size:16px;padding:14px">ガチャ</button><button class="btn sec" id="bDice" style="font-size:16px;padding:14px">サイコロ</button></div>
   </div>
   <div class="card help">
@@ -102,7 +130,8 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     ・敵が道の出口まで行くとハートが減ります<br>
     ・1ステージは10ウェーブ。ウェーブ10のボスを倒すとクリアで、次のステージ（敵が強い）が遊べるようになります<br>
     ・試合が終わると「越えたウェーブ×10」ゴールド、ボスを倒すとさらに50ゴールド、初めてクリアしたステージは+100ゴールドもらえます。途中でやめても、そこまでの分はもらえます<br>
-    ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv5）
+    ・ガチャ（100G）で新しいサイコロが出ます。持っているサイコロが出たら「かけら」になり、かけらとゴールドでレベルアップ（攻撃+10%、最大Lv5）<br>
+    ・「ランク戦」は300人の順位表で戦うCPU対戦。勝つとランクポイントとゴールド。遊ばない間もほかのプレイヤーは遊んでいて、順位が動きます
   </div>
 </div></section>
 
@@ -151,6 +180,90 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <button class="btn sec" id="bBack">もどる</button>
 </div></section>
 
+<!-- ランク戦メニュー -->
+<section class="screen" id="scRank"><div class="inner">
+  <h2>ランク戦</h2>
+  <div class="card rkcard"><div class="badge" id="rBadge">W</div>
+    <div class="rkinfo"><b id="rTier">ウッド IV</b><span id="rPts">0 RP</span><div class="bar"><i id="rBar" style="width:0"></i></div><span id="rNext"></span></div></div>
+  <div class="card goal"><span>順位</span><b id="rPos">-</b><small id="rPosSub"></small></div>
+  <div class="card"><label style="font-size:14px">あなたの名前（順位表に出ます）</label><input type="text" id="rName" maxlength="12" value="あなた"></div>
+  <div id="rMsg" class="msg"></div>
+  <button class="btn rk" id="bFind" disabled>対戦相手を探す</button>
+  <button class="btn sec" id="bBoard" disabled>順位表を見る</button>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><b id="rSeason" style="font-size:15px">シーズン</b><span id="rSeasonLeft" style="font-size:13px;color:var(--muted)"></span></div>
+    <div class="grades" id="rGrades"></div>
+    <div id="rForecast" style="font-size:13px;color:var(--muted);line-height:1.6"></div>
+  </div>
+  <div class="card help">
+    <b style="color:var(--text)">ランク戦のルール</b>
+    ・上が相手、下があなた。道は別々で、同じ敵が両方に来ます。先にハート3つがなくなった方の負け<br>
+    ・時間がたつほど敵が強くなり、7分を過ぎると「サドンデス」で一気に強くなります<br>
+    ・勝つと約+20RP。負けるとランクが高いほど多く減ります（ウッドは減りません）<br>
+    ・<b>マッチした後に閉じたり、試合の途中でやめると負け</b>になります<br>
+    ・ダイスマスターは 2000RP 以上で、しかも上位30人だけ<br>
+    ・毎月1日にシーズンが区切られ、攻め・守り・勝率・試合数の成績で 0〜3段階ランクが下がります。最高ランクに応じてご褒美あり
+  </div>
+  <button class="btn sec" id="bRankBack">もどる</button>
+</div></section>
+
+<!-- 順位表 -->
+<section class="screen" id="scBoard"><div class="inner">
+  <h2>順位表（300人）</h2>
+  <div class="lb" id="lbList"></div>
+  <button class="btn sec" id="bBoardBack">もどる</button>
+</div></section>
+
+<!-- 対戦準備（マッチ後） -->
+<section class="screen" id="scVs"><div class="inner">
+  <h2>マッチしました！</h2>
+  <div class="card vs">
+    <div class="side"><div class="badge s" id="vMyB">W</div><b id="vMyN">あなた</b><span id="vMyT"></span></div>
+    <div class="mid">VS</div>
+    <div class="side"><div class="badge s" id="vOpB">W</div><b id="vOpN">相手</b><span id="vOpT"></span></div>
+  </div>
+  <div class="card"><span style="font-size:13px;color:var(--muted)">相手のデッキ</span><div class="minideck" id="vOpDeck"></div><span id="vOpLv" style="font-size:12px;color:var(--muted);text-align:center"></span></div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><span id="vDeckInfo" style="font-size:14px"></span>
+      <button class="btn sec" id="bVsAuto" style="width:auto;padding:8px 14px;font-size:14px">おまかせ</button></div>
+    <div class="grid" id="vGrid"></div>
+    <div class="desc" id="vDesc">時間切れになると、今のデッキ（足りなければおまかせ）で始まります</div>
+  </div>
+  <button class="btn rk" id="bVsStart">対戦開始（30）</button>
+  <p class="sub" style="font-size:12px">※ここで閉じると負けになります</p>
+</div></section>
+
+<!-- マッチング中 -->
+<div class="overlay" id="ovMatch"><div class="modal">
+  <div><span class="spin" id="mSpin">🎲</span></div>
+  <h3 id="mTitle">対戦相手を探しています…</h3>
+  <div id="mTime" style="color:var(--muted)">0:00</div>
+  <div id="mMsg" class="msg"></div>
+  <button class="btn sec" id="bMatchCancel">キャンセル</button>
+</div></div>
+
+<!-- ランク戦の結果 -->
+<div class="overlay" id="ovRank"><div class="modal">
+  <h3 id="kTitle">勝利！</h3>
+  <div id="kOpp" style="color:var(--muted);font-size:14px"></div>
+  <div class="delta" id="kDelta"></div>
+  <div id="kTier" style="font-size:16px;font-weight:700"></div>
+  <div id="kPos" style="font-size:14px;color:var(--muted)"></div>
+  <div id="kMsg" class="msg"></div>
+  <button class="btn sec" id="bRankRetry" style="display:none">もう一度保存する</button>
+  <button class="btn rk" id="bRankAgain">もう一度ランク戦</button>
+  <button class="btn sec" id="bRankMenu">ランク戦メニューへ</button>
+</div></div>
+
+<!-- シーズン終了 -->
+<div class="overlay" id="ovSeason"><div class="modal">
+  <h3 id="sTitle">シーズン終了</h3>
+  <div class="grades" id="sGrades"></div>
+  <div id="sBody" style="font-size:15px;line-height:1.7"></div>
+  <div id="sMsg" class="msg"></div>
+  <button class="btn" id="bSeasonOk">OK</button>
+</div></div>
+
 <!-- 一時停止 -->
 <div class="overlay" id="ovPause"><div class="modal">
   <h3>一時停止中</h3>
@@ -173,6 +286,82 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 </div></div>
 
 <script>
+// ====== ランク戦の決まり（保存の側からも使う） ======
+window.RANK=(()=>{
+  const N=300,TOP=30,MASTER_MIN=2000;
+  const TIERS=[
+    {n:'ウッド',c:'#c08a55',k:'木'},{n:'ストーン',c:'#9aa0ad',k:'石'},{n:'アイアン',c:'#7d8da3',k:'鉄'},
+    {n:'シルバー',c:'#d9e0ec',k:'銀'},{n:'ゴールド',c:'#ffcc4d',k:'金'},{n:'クリスタル',c:'#7fe3ff',k:'晶'},
+    {n:'ダイスマスター',c:'#ff6fd8',k:'極'}];
+  const LO=[0,200,450,750,1100,1500,MASTER_MIN];
+  const LOSS=[0,5,10,14,18,22,25];          // 負けたときに減るRP
+  const WIN_GOLD=[20,25,30,40,50,60,80];    // 勝ったときのゴールド
+  const FIRST=[0,100,150,200,300,400,500];  // 初めてそのランクに上がった特典
+  const SEASON_GOLD=[50,100,200,300,450,600,1000]; // シーズンの最高ランクのご褒美
+  function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  // 架空のプレイヤー（いつも同じ300人）。上位ほど強そうな名前
+  const STRONG=['Dice_Kaiser','覇王ころがし','六ノ目の帝王','ZeroLuck','ジョーカー使い','MeteorQueen','氷結の魔術師','無限合体',
+    'JackPot_K','SixSixSix','神引きの民','Snipe_Ace','合体職人','黒いサイコロ','Kaiser_R','天下一ダイス','LuckyStrike','運命の出目',
+    'ProRoller','鉄壁の守護者','RNG_God','ゾロ目の鬼','風神ダイス','雷神ダイス','Crit_Master','孤高のメテオ','DiceMeister','ころがり番長',
+    'Phantom6','夜明けのメテオ','蒼炎のサイコロ','最速の召喚士','Merge_King','裏ボス','七つ星','毒使いの影','Ice_Breaker','ダイス仙人'];
+  const A=['ころころ','ねむい','はらぺこ','のんびり','さいころ','ゆる','ぽんこつ','きまぐれ','しろくま','たぬき','もちもち','ぴよ','すやすや',
+    'まったり','ちびっこ','おでん','みかん','こたつ','あんこ','ひよこ','てくてく','ほくほく','ぷにぷに','ごろごろ','わくわく','しょぼん'];
+  const B=['丸','パンダ','くん','ちゃん','たろう','ねこ','先生','王子','マン','隊長','さん','ぴょん','っち','侍','忍者','だいすき'];
+  const RA=['Dice','Roll','Lucky','Snake','Joker','Merge','Pip','Cube','Six','Combo','Tama','Koro','Neko','Moti','Haru','Yuki'];
+  const RB=['_kun','Boy','99','_jp','Lover','Taro','777','_x','Maru','Chan','123','_san','0301','Z','_desu','2nd'];
+  const CPU=[];const used=new Set();const r0=rng(20261113);
+  for(let i=0;i<N;i++){
+    let name;
+    if(i<STRONG.length)name=STRONG[i];
+    else{do{name=r0()<0.55?A[Math.floor(r0()*A.length)]+B[Math.floor(r0()*B.length)]:RA[Math.floor(r0()*RA.length)]+RB[Math.floor(r0()*RB.length)];}while(used.has(name));}
+    used.add(name);
+    const T=Math.round(2900*Math.pow(1-i/N,2.2)*(0.93+0.14*r0()));
+    const act=Math.round((0.5+1.0*r0()+0.4*(1-i/N))*100)/100; // よく遊ぶ人ほど大きい
+    CPU.push({name,T,act});
+  }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function baseTier(p){let k=0;for(let i=0;i<6;i++)if(p>=LO[i])k=i;return k;}
+  const position=(cpu,p)=>{let c=1;for(const q of cpu)if(q>p)c++;return c;}; // 自分の順位
+  const tierOf=(p,pos)=>p>=MASTER_MIN&&pos<=TOP?6:baseTier(p);
+  // CPU i の順位（自分も含めた中で）
+  function cpuPos(cpu,i,me){const p=cpu[i];let c=1;for(let j=0;j<cpu.length;j++)if(j!==i&&(cpu[j]>p||(cpu[j]===p&&j<i)))c++;if(me>p)c++;return c;}
+  function label(p,t,pos){
+    if(t===6)return TIERS[6].n+' #'+pos;
+    const lo=LO[t],hi=t===5?MASTER_MIN:LO[t+1];
+    const dv=p>=hi?1:4-Math.floor((p-lo)/((hi-lo)/4));
+    return TIERS[t].n+' '+['','I','II','III','IV'][clamp(dv,1,4)];
+  }
+  // 成績の判定（S〜D）とシーズン終わりの下げ幅
+  const G5=['D','C','B','A','S'];
+  function grade(v,th,lowGood){let k=0;for(let i=0;i<th.length;i++)if(lowGood?v<=th[i]:v>=th[i])k=i+1;return k;}
+  function grades(st){
+    st=st||{};
+    const atk=st.kn?grade(1-st.kp/st.kn,[0.68,0.73,0.78,0.83]):0;       // 敵を道の早いうちに倒せたか
+    const def=st.sec>0?grade(st.lk/(st.sec/60),[0.5,0.3,0.15,0.05],true):0; // 1分あたり通した敵の数
+    const win=st.g?grade(st.w/st.g,[0.35,0.45,0.55,0.65]):0;
+    const games=grade(st.g||0,[10,20,40,60]);
+    const total=atk+def+win+games;
+    const drop=total>=13?0:total>=9?1:total>=5?2:3;
+    return{atk,def,win,games,total,drop};
+  }
+  // 相手CPUの強さ（ランクポイントが高いほど、レベルも判断も上）
+  const AUTO=['fire','elec','wind','iron','snipe','meteor','poison','joker'];
+  const ALLD=['fire','elec','wind','poison','ice','iron','snipe','light','crit','grow','joker','meteor'];
+  const RW={fire:1,elec:1,wind:1,poison:1,ice:1,iron:1.2,snipe:1.2,light:1.1,crit:1.3,grow:1,joker:1.5,meteor:1.5};
+  function cpuSetup(i,p){
+    const s=clamp(p/2300,0,1.15),r=rng(i*101+7);
+    const pool=ALLD.filter(t=>s>0.25||['fire','elec','wind','poison','ice','iron','snipe','light'].includes(t));
+    const deck=[];const add=t=>{if(!deck.includes(t)&&deck.length<5)deck.push(t);};
+    if(r()<0.6)add('ice');
+    let guard=0;
+    while(deck.filter(t=>AUTO.includes(t)).length<2&&guard++<50){const c=pool.filter(t=>AUTO.includes(t));add(c[Math.floor(r()*c.length)]);}
+    while(deck.length<5&&guard++<200){let sum=0;const left=pool.filter(t=>!deck.includes(t));const w=left.map(t=>Math.pow(RW[t],1+3*s));w.forEach(x=>sum+=x);let x=r()*sum;for(let k=0;k<left.length;k++){x-=w[k];if(x<=0){add(left[k]);break;}}}
+    const cls={};const base=1+4*Math.min(1,s);
+    deck.forEach(t=>cls[t]=clamp(Math.round(base+(r()-0.5)*1.4),1,5));
+    return{deck,cls,react:1.5-0.95*Math.min(1,s),miss:0.5*(1-Math.min(1,s)),s};
+  }
+  return{N,TOP,MASTER_MIN,TIERS,LO,LOSS,WIN_GOLD,FIRST,SEASON_GOLD,CPU,clamp,baseTier,position,tierOf,cpuPos,label,grades,G5,cpuSetup,rng};
+})();
 (()=>{
 'use strict';
 // ====== 基本設定 ======
@@ -183,6 +372,15 @@ const PATH=[[-12,270],[338,270],[338,329],[22,329],[22,388],[372,388]];
 const SEGS=[];let PATH_LEN=0;
 for(let i=0;i<PATH.length-1;i++){const[a,b]=[PATH[i],PATH[i+1]];const l=Math.hypot(b[0]-a[0],b[1]-a[1]);SEGS.push({a,b,l,s:PATH_LEN});PATH_LEN+=l;}
 function posAt(d){for(const s of SEGS){if(d<=s.s+s.l){const t=(d-s.s)/s.l;return[s.a[0]+(s.b[0]-s.a[0])*t,s.a[1]+(s.b[1]-s.a[1])*t];}}const L=PATH[PATH.length-1];return[L[0],L[1]];}
+// ランク戦：上が相手（小さめの盤面と道）、下が自分
+const OP={cell:32,gap:4,x:92,y:50};
+const PATH_OP=[[-12,170],[338,170],[338,196],[22,196],[22,222],[372,222]];
+const SEGS_OP=[];let OP_LEN=0;
+for(let i=0;i<PATH_OP.length-1;i++){const[a,b]=[PATH_OP[i],PATH_OP[i+1]];const l=Math.hypot(b[0]-a[0],b[1]-a[1]);SEGS_OP.push({a,b,l,s:OP_LEN});OP_LEN+=l;}
+function posOp(d){d=d/PATH_LEN*OP_LEN;for(const s of SEGS_OP){if(d<=s.s+s.l){const t=(d-s.s)/s.l;return[s.a[0]+(s.b[0]-s.a[0])*t,s.a[1]+(s.b[1]-s.a[1])*t];}}const L=PATH_OP[PATH_OP.length-1];return[L[0],L[1]];}
+const enemyPos=e=>e.side==='op'?posOp(e.dist):posAt(e.dist);
+const sameSide=(a,b)=>!G.pvp||a.side===b.side;
+const sidesOf=()=>G.pvp?['me','op']:['me','bot'];
 
 // ====== サイコロ定義（12種類） ======
 const DICE={
@@ -273,8 +471,8 @@ resize();setTimeout(resize,300);setTimeout(resize,1200);
 
 // ====== ゲーム状態 ======
 let G=null;
-function newSide(deck){
-  const lvl={},cls={};deck.forEach(t=>{lvl[t]=1;cls[t]=dieLv(t);});
+function newSide(deck,cls0){
+  const lvl={},cls={};deck.forEach(t=>{lvl[t]=1;cls[t]=cls0?cls0[t]:dieLv(t);});
   return{dice:new Array(15).fill(null),sp:100,summons:0,deck:deck.slice(),lvl,cls};
 }
 function newGame(stage){
@@ -286,10 +484,22 @@ function newGame(stage){
   if(session.plays>1) say(fmt(pick(LINES.again),{n:session.plays,b:session.best}),3);
   else say(pick(LINES.start),3);
 }
+// ランク戦の試合：o = {o:番号,name,pts,tier,pos, deck,cls,react,miss}
+const PVP_WAVE_T=17,PVP_SD=420; // 1ウェーブ17秒、7分でサドンデス
+function newRanked(o){
+  G={pvp:true,stage:1,me:newSide(decks.me),op:newSide(o.deck,o.cls),opp:o,enemies:[],bullets:[],fx:[],
+    wave:0,lives:3,opLives:3,spawnQ:[],spawnT:0,waveT:3.5,running:true,paused:false,over:false,
+    time:0,botT:1.2,opT:1.5,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,
+    parts:[],texts:[],meteors:[],shake:0,flash:0,banner:'3秒後にスタート',bannerT:3.2,sd:false,
+    st:{kn:0,kp:0,lk:0}};
+}
 const summonCost=s=>10+s.summons*10;
 const powerCost=(s,t)=>s.lvl[t]>=5?Infinity:s.lvl[t]*100;
-const cellXY=(side,i)=>{const c=i%COLS,r=Math.floor(i/COLS);return[BX+c*(CELL+GAP),BOARD_Y[side]+r*(CELL+GAP)];};
-const cellCenter=(side,i)=>{const[x,y]=cellXY(side,i);return[x+CELL/2,y+CELL/2];};
+const cellSize=side=>side==='op'?OP.cell:CELL;
+const cellXY=(side,i)=>{const c=i%COLS,r=Math.floor(i/COLS);
+  if(side==='op')return[OP.x+c*(OP.cell+OP.gap),OP.y+r*(OP.cell+OP.gap)];
+  return[BX+c*(CELL+GAP),BOARD_Y[side]+r*(CELL+GAP)];};
+const cellCenter=(side,i)=>{const[x,y]=cellXY(side,i);const z=cellSize(side);return[x+z/2,y+z/2];};
 
 // ====== 演出（粒・文字・ゆれ） ======
 function burst(x,y,c,n,{spd=90,life=0.45,size=2.5,g=0,kind='dot'}={}){
@@ -301,8 +511,9 @@ function popText(x,y,text,c,size=13){
   G.texts.push({x:Math.min(W-40,Math.max(40,x+(Math.random()-0.5)*24)),y:y-Math.random()*10,text,c,size,t:0.9,life:0.9});
   if(G.texts.length>24)G.texts.shift();
 }
+function note(text){if(!G)return;G.bubble=text;G.bubbleT=2.6;G.lastBubble=G.time;}
 function say(text,prio=1){
-  if(!G)return;
+  if(!G||G.pvp)return; // ランク戦では相棒のセリフは出さない
   if(prio<2 && G.time-G.lastBubble<4)return;
   G.bubble=text;G.bubbleT=3.2;G.lastBubble=G.time;
 }
@@ -357,7 +568,18 @@ function powerUp(side,t){
 const STAGE_WAVES=10,STAGE_MUL=1.7;
 const stageMul=st=>Math.pow(STAGE_MUL,(st||1)-1);
 function enemyHP(w){return Math.round((280*Math.pow(1.115,w-1)+w*20)*stageMul(G.stage));}
+function startWavePvp(){
+  G.wave++;const w=G.wave;
+  const boss=w%5===0;const q=[];
+  if(boss){q.push({type:'boss'});for(let i=0;i<4;i++)q.push({type:'normal'});}
+  else{const n=Math.min(6+w,20);for(let i=0;i<n;i++){let t='normal';const r=Math.random();
+    if(w>=3&&r<0.25)t='fast';else if(w>=5&&r>0.82)t='tank';q.push({type:t});}}
+  G.spawnQ=q;G.spawnT=0;G.spawnInt=Math.min(0.75,(PVP_WAVE_T-5)/q.length);
+  if(w>1){const bonus=20+(w-1)*10;G.me.sp+=bonus;G.op.sp+=bonus;}
+  G.banner=boss?'ボス ウェーブ '+w:'ウェーブ '+w;G.bannerT=1.4;
+}
 function startWave(){
+  if(G.pvp)return startWavePvp();
   G.wave++;const w=G.wave;
   const n=Math.min(8+w,26);const q=[];
   const boss=w%10===0;
@@ -379,13 +601,17 @@ function startWave(){
     .catch(e=>{g.saveErr='到達記録を保存できていません：'+errText(e);});}
   if(w>1 && (w-1)%5===0) say(fmt(pick(LINES.milestone),{w:w-1}),1);
 }
-function spawnEnemy(spec){
-  const w=G.wave;const base=enemyHP(w);
+const PVP_HP=0.22; // ランク戦は1人で1本の道を守るので、敵の体力は控えめ
+function pvpHpMul(){return G.time>PVP_SD?Math.pow(1.45,(G.time-PVP_SD)/15):1;}
+function spawnEnemy(spec,side){
+  const w=G.wave;let base=enemyHP(w);
   let hp=base,speed=52,size=11,lifeDmg=1,sp=10+w;
   if(spec.type==='fast'){hp=base*0.5;speed=90;size=9;}
   if(spec.type==='tank'){hp=base*3;speed=34;size=14;sp=2*(10+w);lifeDmg=2;}
   if(spec.type==='boss'){hp=base*40;speed=22;size=22;sp=200+10*w;lifeDmg=99;}
-  G.enemies.push({type:spec.type,hp,maxhp:hp,speed,size,dist:0,slow:0,slowT:0,poison:0,poisonT:0,lifeDmg,sp,skillT:6,x:PATH[0][0],y:PATH[0][1],hitT:0});
+  if(G.pvp){hp*=PVP_HP*pvpHpMul();if(spec.type==='boss'){hp*=0.4;lifeDmg=2;}if(G.sd)speed*=1.25;}
+  const e={type:spec.type,hp,maxhp:hp,speed,size,dist:0,slow:0,slowT:0,poison:0,poisonT:0,lifeDmg,sp,skillT:6,x:PATH[0][0],y:PATH[0][1],hitT:0,side};
+  [e.x,e.y]=enemyPos(e);G.enemies.push(e);
 }
 
 // ====== 戦闘 ======
@@ -400,9 +626,10 @@ function supportOf(side,i){
 }
 // 試合中の強化（1つ+25%）× サイコロのレベル（1つ+10%）
 const lv=(s,t)=>(1+0.25*((s.lvl[t]||1)-1))*(1+0.1*((s.cls&&s.cls[t]||1)-1));
-function front(){let best=null;for(const e of G.enemies)if(e.hp>0&&(!best||e.dist>best.dist))best=e;return best;}
-function chooseTarget(type){
-  const alive=G.enemies.filter(e=>e.hp>0);if(!alive.length)return null;
+const mine=(e,side)=>!G.pvp||e.side===side;
+function front(side){let best=null;for(const e of G.enemies)if(e.hp>0&&mine(e,side)&&(!best||e.dist>best.dist))best=e;return best;}
+function chooseTarget(type,side){
+  const alive=G.enemies.filter(e=>e.hp>0&&mine(e,side));if(!alive.length)return null;
   if(type==='snipe')return alive.reduce((a,b)=>b.hp>a.hp?b:a);
   if(type==='poison'){const np=alive.filter(e=>e.poisonT<=0);if(np.length)return np.reduce((a,b)=>b.dist>a.dist?b:a);}
   return alive.reduce((a,b)=>b.dist>a.dist?b:a);
@@ -411,7 +638,8 @@ function damage(e,amt){
   if(e.hp<=0)return;
   e.hp-=amt;e.hitT=0.08;
   if(e.hp<=0){
-    G.me.sp+=e.sp;G.bot.sp+=e.sp;
+    if(G.pvp){G[e.side].sp+=e.sp;if(e.side==='me'){G.st.kn++;G.st.kp+=Math.min(1,e.dist/PATH_LEN);}}
+    else{G.me.sp+=e.sp;G.bot.sp+=e.sp;}
     burst(e.x,e.y,e.type==='boss'?'#ffcc4d':'#e8e8f0',e.type==='boss'?36:5,{spd:e.type==='boss'?180:70,life:e.type==='boss'?0.9:0.3,size:e.type==='boss'?4:2});
     if(e.type==='boss'){say(pick(LINES.bossDown),2);G.fx.push({k:'ring',x:e.x,y:e.y,t:0.6,c:'#ffcc4d',r:60});
       G.shake=0.45;popText(e.x,e.y-26,'ボス撃破！','#ffcc4d',20);}
@@ -432,9 +660,9 @@ function applyHit(b){
   else if(b.type==='iron')burst(hx,hy,'#ffe7a3',5,{spd:120,life:0.25,size:2});
   else if(b.type==='snipe')G.fx.push({k:'ring',x:hx,y:hy,t:0.2,c:'#9fb8ff',r:20});
   else burst(hx,hy,DICE[b.type].c,3,{spd:60,life:0.3,size:2});
-  if(b.type==='fire'){for(const o of G.enemies)if(o!==e&&o.hp>0&&Math.hypot(o.x-e.x,o.y-e.y)<42)damage(o,dmg*0.5);
+  if(b.type==='fire'){for(const o of G.enemies)if(o!==e&&o.hp>0&&sameSide(o,e)&&Math.hypot(o.x-e.x,o.y-e.y)<42)damage(o,dmg*0.5);
     G.fx.push({k:'ring',x:e.x,y:e.y,t:0.25,c:DICE.fire.c,r:42});}
-  if(b.type==='elec'){const others=G.enemies.filter(o=>o!==e&&o.hp>0).sort((p,q)=>Math.hypot(p.x-e.x,p.y-e.y)-Math.hypot(q.x-e.x,q.y-e.y)).slice(0,2);
+  if(b.type==='elec'){const others=G.enemies.filter(o=>o!==e&&o.hp>0&&sameSide(o,e)).sort((p,q)=>Math.hypot(p.x-e.x,p.y-e.y)-Math.hypot(q.x-e.x,q.y-e.y)).slice(0,2);
     for(const o of others){damage(o,dmg*0.7);G.fx.push({k:'zap',x:e.x,y:e.y,x2:o.x,y2:o.y,t:0.18});}
     burst(e.x,e.y,'#fff27a',4,{spd:90,life:0.2,size:2});}
   if(b.type==='ice'){e.slow=Math.min(0.5,Math.max(e.slow,0.18+0.04*b.pip));e.slowT=2;}
@@ -444,7 +672,13 @@ function update(dt){
   if(!G||!G.running||G.paused||G.over)return;
   G.time+=dt;
   // ウェーブ進行
-  if(G.breakT>0){G.breakT-=dt;if(G.breakT<=0)startWave();}
+  if(G.pvp){ // ランク戦：時間でウェーブが進む。同じ敵が両方の道に出る
+    if(!G.sd&&G.time>PVP_SD){G.sd=true;G.banner='サドンデス！敵がどんどん強くなる';G.bannerT=2.5;G.flash=0.3;}
+    G.waveT-=dt;if(G.waveT<=0){startWave();G.waveT=PVP_WAVE_T;}
+    if(G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){const sp=G.spawnQ.shift();spawnEnemy(sp,'me');spawnEnemy(sp,'op');G.spawnT=G.spawnInt;}}
+    if(G.bannerT>0)G.bannerT-=dt;
+  }
+  else if(G.breakT>0){G.breakT-=dt;if(G.breakT<=0)startWave();}
   else{
     if(G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){spawnEnemy(G.spawnQ.shift());G.spawnT=G.spawnInt;}}
     else if(!G.enemies.length&&G.wave>=STAGE_WAVES){gameOver(true);return;} // ステージクリア
@@ -460,17 +694,22 @@ function update(dt){
       e.bubT=(e.bubT||0)-dt;if(e.bubT<=0){e.bubT=0.22;G.parts.push({x:e.x+(Math.random()-0.5)*e.size*1.6,y:e.y-e.size*0.3,vx:0,vy:-25,g:0,t:0.7,life:0.7,c:'#9be35a',size:2+Math.random()*2,kind:'bubble'});}}
     if(e.hitT>0)e.hitT-=dt;
     e.dist+=e.speed*(1-e.slow)*dt;
-    [e.x,e.y]=posAt(e.dist);
+    [e.x,e.y]=enemyPos(e);
     if(e.type==='boss'){e.skillT-=dt;if(e.skillT<=0){e.skillT=6;bossSkill(e);}}
     if(e.dist>=PATH_LEN){
-      e.hp=0;e.leaked=true;G.lives-=e.lifeDmg;G.flash=0.4;G.shake=Math.max(G.shake,0.2);
-      if(G.lives>0)say(pick(LINES.leak),2);
+      e.hp=0;e.leaked=true;
+      if(G.pvp&&e.side==='op'){G.opLives-=e.lifeDmg;if(G.opLives>0)note('相手のハートが減った！');}
+      else{G.lives-=e.lifeDmg;G.flash=0.4;G.shake=Math.max(G.shake,0.2);
+        if(G.pvp){G.st.lk+=e.lifeDmg;if(G.lives>0)note('ハートが減った！あと'+G.lives+'つ');}
+        else if(G.lives>0)say(pick(LINES.leak),2);}
     }
   }
   G.enemies=G.enemies.filter(e=>e.hp>0);
-  if(G.lives<=0){gameOver();return;}
+  if(G.pvp){
+    if(G.lives<=0||G.opLives<=0){rankOver(G.lives<=0&&G.opLives<=0?'draw':G.lives<=0?'lose':'win');return;}
+  }else if(G.lives<=0){gameOver();return;}
   // サイコロの攻撃
-  for(const side of ['me','bot']){
+  for(const side of sidesOf()){
     const s=G[side];
     s.dice.forEach((d,i)=>{
       if(!d)return;
@@ -478,11 +717,11 @@ function update(dt){
       if(d.stun>0){d.stun-=dt;return;}
       if(d.type==='grow'&&d.pip<7){d.growT+=dt;if(d.growT>=15){s.dice[i]=newDie(pick(s.deck),d.pip+1);
         const[gx,gy]=cellCenter(side,i);burst(gx,gy,'#7dffa8',10,{spd:70,life:0.6,size:3,g:-40,kind:'star'});popText(gx,gy-20,'成長！','#7dffa8',12);return;}}
-      if(d.type==='meteor'){d.mt=(d.mt??3)-dt;if(d.mt<=0){const t=chooseTarget('x');if(t){d.mt=6;meteor(side,t,60*d.pip*lv(s,'meteor'));}else d.mt=0.5;}}
+      if(d.type==='meteor'){d.mt=(d.mt??3)-dt;if(d.mt<=0){const t=chooseTarget('x',side);if(t){d.mt=6;meteor(side,t,60*d.pip*lv(s,'meteor'));}else d.mt=0.5;}}
       const sup=supportOf(side,i);
       d.cd-=dt*(1+sup.spd);
       if(d.cd>0)return;
-      const t=chooseTarget(d.type);if(!t){d.cd=0.1;return;}
+      const t=chooseTarget(d.type,side);if(!t){d.cd=0.1;return;}
       const def=DICE[d.type];d.cd=def.int;
       let dmg=def.dmg*d.pip*lv(s,d.type);
       const crit=Math.random()<0.05+sup.crit;if(crit)dmg*=2.5;
@@ -508,7 +747,7 @@ function update(dt){
   for(const m of G.meteors){
     m.t-=dt;if(m.target.hp>0){m.x=m.target.x;m.y=m.target.y;}
     if(m.t<=0){
-      for(const o of G.enemies)if(o.hp>0&&Math.hypot(o.x-m.x,o.y-m.y)<50)damage(o,o===m.target?m.dmg:m.dmg*0.5);
+      for(const o of G.enemies)if(o.hp>0&&sameSide(o,m.target)&&Math.hypot(o.x-m.x,o.y-m.y)<50)damage(o,o===m.target?m.dmg:m.dmg*0.5);
       G.fx.push({k:'ring',x:m.x,y:m.y,t:0.4,c:DICE.meteor.c,r:50});
       burst(m.x,m.y,'#ff9a2e',14,{spd:150,life:0.5,size:3.5});burst(m.x,m.y,'#ffe08a',8,{spd:90,life:0.4,size:2.5});
       popText(m.x,m.y-20,short(m.dmg),'#ffb347',14);G.shake=Math.max(G.shake,0.15);m.done=true;
@@ -517,11 +756,26 @@ function update(dt){
   G.meteors=G.meteors.filter(m=>!m.done);
   if(G.bubbleT>0)G.bubbleT-=dt;
   // 相棒の行動
-  G.botT-=dt;if(G.botT<=0){G.botT=0.6+Math.random()*0.5;botAct('bot');if(G.autoMe)botAct('me');}
+  if(G.pvp){
+    G.opT-=dt;if(G.opT<=0)cpuAct();
+    if(G.autoMe){G.botT-=dt;if(G.botT<=0){G.botT=G.autoMeT||(0.6+Math.random()*0.5);botAct('me');}}
+  }else{G.botT-=dt;if(G.botT<=0){G.botT=0.6+Math.random()*0.5;botAct('bot');if(G.autoMe)botAct('me');}}
+}
+// 相手CPU：ランクが低いほど動きが遅く、ミス（ぼーっとする・雑な合体）も多い
+function cpuAct(){
+  const o=G.opp;G.opT=o.react*(0.8+Math.random()*0.4);
+  if(Math.random()<o.miss){
+    if(Math.random()<0.5)return;
+    const s=G.op,ms=[];for(let i=0;i<15;i++)for(let j=0;j<15;j++)if(i!==j&&canMerge(s.dice[i],s.dice[j]))ms.push([i,j]);
+    if(ms.length){const m=pick(ms);merge('op',m[0],m[1]);return;}
+    if(s.dice.some(d=>!d))summon('op');
+    return;
+  }
+  botAct('op');
 }
 function meteor(side,t,dmg){G.meteors.push({target:t,x:t.x,y:t.y,dmg,t:0.45,T:0.45});}
 function bossSkill(e){
-  const all=[];for(const side of ['me','bot'])G[side].dice.forEach((d,i)=>{if(d)all.push({d,side,i});});
+  const all=[];for(const side of (G.pvp?[e.side]:['me','bot']))G[side].dice.forEach((d,i)=>{if(d)all.push({d,side,i});});
   for(let k=0;k<3&&all.length;k++){const o=all.splice(Math.floor(Math.random()*all.length),1)[0];o.d.stun=3;
     const[x2,y2]=cellCenter(o.side,o.i);G.fx.push({k:'zap',x:e.x,y:e.y,x2,y2,t:0.45,c:'#c77dff'});burst(x2,y2,'#c77dff',6,{spd:60,life:0.4});}
   G.fx.push({k:'ring',x:e.x,y:e.y,t:0.5,c:'#c77dff',r:44});
@@ -530,10 +784,10 @@ function bossSkill(e){
 
 // ====== 相棒AI ======
 function strength(s){let v=0;s.dice.forEach(d=>{if(d)v+=d.pip*lv(s,d.type)*(DMG_TYPES.includes(d.type)?1.2:0.8);});return v;}
-function danger(){const f=front();if(!f)return 0;let d=f.dist/PATH_LEN;if(f.type==='boss')d=Math.max(d,0.5+d/2);return d;}
+function danger(side){const f=front(side);if(!f)return 0;let d=f.dist/PATH_LEN;if(f.type==='boss')d=Math.max(d,0.5+d/2);return d;}
 function botAct(side){
-  const s=G[side],other=G[side==='bot'?'me':'bot'];
-  const dz=danger();
+  const s=G[side],other=G.pvp?s:G[side==='bot'?'me':'bot'];
+  const dz=danger(side);
   const hasEmpty=s.dice.some(d=>!d);
   const iceOnBoard=t=>t.dice.some(d=>d&&d.type==='ice'&&d.stun<=0);
   // 相手の様子を見る
@@ -620,6 +874,45 @@ function settleMatch(id,w){
   });
 }
 
+// ====== ランク戦の終了 ======
+function rankOver(r,surrender){
+  G.over=true;G.running=false;G.drag=null;G.hold=null;
+  const st={kn:G.st.kn,kp:Math.round(G.st.kp*1000)/1000,lk:G.st.lk,sec:Math.round(G.time),left:Math.max(0,G.lives)};
+  const t=document.getElementById('kTitle');
+  t.textContent=r==='win'?'勝利！':r==='draw'?'引き分け':surrender?'降参…負け':'敗北…';
+  t.style.color=r==='win'?'var(--accent)':r==='draw'?'':'var(--bad)';
+  document.getElementById('kOpp').textContent='相手：'+G.opp.name+'　試合時間 '+mmss(G.time);
+  ['kDelta','kTier','kPos'].forEach(id=>document.getElementById(id).textContent='');
+  show('ovRank',true);
+  settleRank(G.matchId,r,st);
+}
+function settleRank(id,r,st){
+  const a=document.getElementById('bRankAgain'),m=document.getElementById('bRankMenu'),br=document.getElementById('bRankRetry');
+  a.disabled=m.disabled=true;br.style.display='none';
+  msg('kMsg','結果を保存中…','info');
+  Cloud().rankFinish(id,r,st).then(({profile:p,result:x})=>{
+    setProfile(p);a.disabled=m.disabled=false;
+    if(!x){msg('kMsg','この試合の結果は保存済みです','ok');return;}
+    showRankResult(x);
+  }).catch(e=>{
+    msg('kMsg','結果の保存に失敗しました\n'+errText(e)+'\n（保存できないまま閉じると、負けとして記録されます）','ng');
+    br.style.display='';br.onclick=()=>settleRank(id,r,st);
+    m.disabled=false;
+  });
+}
+function showRankResult(x){
+  const d=document.getElementById('kDelta');
+  d.textContent=(x.dp>0?'+':'')+x.dp+' RP';d.style.color=x.dp>0?'var(--good)':x.dp<0?'var(--bad)':'var(--muted)';
+  const up=x.tA>x.tB,down=x.tA<x.tB;
+  document.getElementById('kTier').textContent=(up?'昇格！ ':down?'降格… ':'')+RANK.label(x.pts,x.tA,x.posA)+'（'+x.pts+' RP）';
+  document.getElementById('kTier').style.color=up?'var(--accent)':'';
+  document.getElementById('kPos').textContent='順位 '+x.posB+'位 → '+x.posA+'位';
+  let t=x.gold?'+'+x.gold+'G を受け取りました':'';
+  if(x.bonus)t+=(t?'\n':'')+'初めて'+RANK.TIERS[x.tA].n+'に上がった特典 +'+x.bonus+'G！';
+  msg('kMsg',(t||'保存しました')+'（所持 '+profile.gold+'G）','ok');
+}
+const mmss=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+
 // ====== 描画 ======
 const PIPS={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],4:[[-1,-1],[1,-1],[-1,1],[1,1]],
  5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]],
@@ -639,19 +932,19 @@ function drawDie(d,x,y,size,alpha=1){
   ctx.globalAlpha=1;
 }
 function drawBoard(side){
-  const s=G[side];
+  const s=G[side];const Z=cellSize(side);
   for(let i=0;i<15;i++){
     const[x,y]=cellXY(side,i);
-    ctx.fillStyle=side==='me'?'#262a52':'#22264a';rr(x,y,CELL,CELL,11);ctx.fill();
+    ctx.fillStyle=side==='me'?'#262a52':side==='op'?'#33223f':'#22264a';rr(x,y,Z,Z,Z>40?11:8);ctx.fill();
     const d=s.dice[i];
     if(G.drag&&side==='me'&&G.drag.from===i&&!holdInfo())continue;
     if(d){
       let a=1;
       if(G.drag&&side==='me'){const src=s.dice[G.drag.from];a=canMerge(src,d)?1:0.35;}
       if((d.type==='light'||d.type==='crit')&&d.stun<=0){
-        ctx.globalAlpha=a*(0.35+0.25*Math.sin(G.time*5));ctx.strokeStyle=DICE[d.type].c;ctx.lineWidth=4;
-        rr(x-3,y-3,CELL+6,CELL+6,13);ctx.stroke();ctx.globalAlpha=1;}
-      drawDie(d,x,y,CELL,a);
+        ctx.globalAlpha=a*(0.35+0.25*Math.sin(G.time*5));ctx.strokeStyle=DICE[d.type].c;ctx.lineWidth=Z>40?4:3;
+        rr(x-3,y-3,Z+6,Z+6,13);ctx.stroke();ctx.globalAlpha=1;}
+      drawDie(d,x,y,Z,a);
       if(G.drag&&side==='me'&&canMerge(s.dice[G.drag.from],d)){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;rr(x-2,y-2,CELL+4,CELL+4,13);ctx.stroke();}
     }
   }
@@ -661,6 +954,7 @@ function draw(){
   if(!G)return;
   ctx.save();
   if(G.shake>0){const k=Math.min(1,G.shake*4)*4;ctx.translate((Math.random()-0.5)*k,(Math.random()-0.5)*k);}
+  if(G.pvp)drawPvpTop();else{
   // ヘッダー
   ctx.fillStyle='#f2f3ff';ctx.font='bold 18px sans-serif';ctx.textAlign='left';
   ctx.fillStyle='#ffcc4d';ctx.font='bold 12px sans-serif';ctx.fillText('ステージ '+G.stage,14,16);
@@ -682,13 +976,26 @@ function draw(){
     ctx.fillText('相棒：'+botName,BX,58);ctx.textAlign='right';ctx.fillText('SP '+Math.floor(G.bot.sp),W-BX,58);
   }
   drawBoard('bot');
+  }
+  if(G.pvp){ // 相手の道（細め）
+    ctx.strokeStyle='#352a4f';ctx.lineWidth=18;ctx.lineJoin='round';ctx.lineCap='butt';
+    ctx.beginPath();PATH_OP.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
+    ctx.fillStyle='#ff6b6b';ctx.font='bold 9px sans-serif';ctx.textAlign='right';ctx.fillText('出口▶',W-4,212);
+    ctx.strokeStyle='#3a3f73';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,243);ctx.lineTo(W-10,243);ctx.stroke();
+    ctx.fillStyle='#14162b';rr(W/2-22,234,44,18,9);ctx.fill();
+    ctx.fillStyle='#ffcc4d';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText('VS',W/2,247);
+    ctx.textAlign='left';ctx.fillStyle='#a3a7d1';ctx.font='bold 11px sans-serif';ctx.fillText('あなた',14,248);
+    for(let i=0;i<3;i++){ctx.fillStyle=i<G.lives?'#ff6b6b':'#3a3f73';heart(62+i*17,243,6);}
+    ctx.textAlign='right';ctx.fillStyle=G.sd?'#ff6b6b':'#a3a7d1';ctx.fillText((G.sd?'サドンデス ':'')+mmss(G.time),W-14,248);
+  }
   // 道
   ctx.strokeStyle='#2c3060';ctx.lineWidth=34;ctx.lineJoin='round';ctx.lineCap='butt';
   ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
   ctx.strokeStyle='#3a3f73';ctx.lineWidth=2;ctx.setLineDash([6,8]);ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#ff6b6b';ctx.font='bold 11px sans-serif';ctx.textAlign='right';ctx.fillText('出口▶',W-4,375);
   // 敵
-  for(const e of G.enemies){
+  for(const e0 of G.enemies){
+    const small=e0.side==='op';const e=small?{...e0,size:e0.size*0.6}:e0;
     const col=e.type==='boss'?'#e04848':e.type==='fast'?'#ffd166':e.type==='tank'?'#8d6bd1':'#e8e8f0';
     ctx.fillStyle=e.hitT>0?'#fff':col;
     if(e.type==='tank'){rr(e.x-e.size,e.y-e.size,e.size*2,e.size*2,4);ctx.fill();}
@@ -707,7 +1014,8 @@ function draw(){
       ctx.fillStyle=e.type==='boss'?'#ff6b6b':r>0.5?'#5be38a':r>0.25?'#ffcc4d':'#ff6b6b';
       ctx.fillRect(e.x-bw/2,by,bw*r,e.type==='boss'?5:3);
     }
-    ctx.font=(e.type==='boss'?'bold 12px':'bold 9px')+' sans-serif';ctx.textAlign='center';
+    if(small&&e.type!=='boss')continue;
+    ctx.font=(e.type==='boss'?(small?'bold 9px':'bold 12px'):'bold 9px')+' sans-serif';ctx.textAlign='center';
     if(e.type==='boss'){ctx.lineWidth=3;ctx.strokeStyle='#5a1010';ctx.strokeText(short(e.hp),e.x,e.y+4);}
     ctx.fillStyle=e.type==='boss'?'#fff':'#14162b';ctx.fillText(short(e.hp),e.x,e.y+(e.type==='boss'?4:3));
   }
@@ -761,6 +1069,13 @@ function draw(){
   ctx.fillText('召喚',W/2,716);ctx.font='13px sans-serif';ctx.fillText(G.me.dice.some(d=>!d)?'SP '+sc:'マスがいっぱい（合体しよう）',W/2,736);
   // ドラッグ中
   if(G.drag&&!holdInfo()){const d=G.me.dice[G.drag.from];if(d)drawDie(d,G.drag.x-CELL/2,G.drag.y-CELL/2,CELL,0.9);}
+  if(G.pvp&&G.bannerT>0){
+    ctx.globalAlpha=Math.min(1,G.bannerT*2);ctx.font='bold 20px sans-serif';
+    const tw=Math.min(340,ctx.measureText(G.banner).width+40);
+    ctx.fillStyle='rgba(20,22,43,.8)';rr(W/2-tw/2,330,tw,52,14);ctx.fill();
+    ctx.fillStyle=G.banner.includes('ボス')||G.banner.includes('サドンデス')?'#ff6b6b':'#ffcc4d';ctx.textAlign='center';
+    ctx.fillText(G.banner,W/2,363,tw-16);ctx.globalAlpha=1;
+  }
   // ウェーブ表示
   if(G.breakT>0&&G.wave>=0){
     const nxt=G.wave+1;ctx.fillStyle='rgba(20,22,43,.75)';rr(70,330,220,56,14);ctx.fill();
@@ -792,6 +1107,21 @@ function draw(){
   // 長押しの説明カード（いちばん上に表示）
   const info=holdInfo();
   if(info)drawInfo(info);
+}
+// ランク戦の上半分：相手の名前・ランク・ハート、相手の盤面
+function drawPvpTop(){
+  const o=G.opp;
+  ctx.textAlign='left';ctx.fillStyle=RANK.TIERS[o.tier].c;ctx.font='bold 11px sans-serif';
+  ctx.fillText(RANK.label(o.pts,o.tier,o.pos),14,16);
+  ctx.fillStyle='#f2f3ff';ctx.font='bold 15px sans-serif';ctx.fillText(o.name,14,35,170);
+  for(let i=0;i<3;i++){ctx.fillStyle=i<G.opLives?'#ff6b6b':'#3a3f73';heart(206+i*22,22,8);}
+  ctx.fillStyle='#2a2e55';rr(W-54,8,44,30,9);ctx.fill();
+  ctx.fillStyle='#f2f3ff';ctx.fillRect(W-38,15,5,16);ctx.fillRect(W-29,15,5,16);
+  ctx.fillStyle='#a3a7d1';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+  ctx.fillText('ウェーブ',14,80);ctx.fillStyle='#f2f3ff';ctx.font='bold 18px sans-serif';ctx.fillText(Math.max(1,G.wave),14,100);
+  ctx.fillStyle='#a3a7d1';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
+  ctx.fillText('相手のSP',W-14,80);ctx.fillStyle='#f2f3ff';ctx.font='bold 14px sans-serif';ctx.fillText(Math.floor(G.op.sp),W-14,98);
+  drawBoard('op');
 }
 function holdInfo(){
   const h=G.hold;if(!h||h.moved||G.time-h.t0<0.35)return null;
@@ -859,7 +1189,7 @@ function short(n){n=Math.ceil(n);if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1
 
 // ====== 入力 ======
 function toLogical(ev){const r=cv.getBoundingClientRect();return[(ev.clientX-r.left)/r.width*W,(ev.clientY-r.top)/r.height*H];}
-function cellAt(side,x,y){for(let i=0;i<15;i++){const[cx,cy]=cellXY(side,i);if(x>=cx&&x<=cx+CELL&&y>=cy&&y<=cy+CELL)return i;}return -1;}
+function cellAt(side,x,y){const Z=cellSize(side);for(let i=0;i<15;i++){const[cx,cy]=cellXY(side,i);if(x>=cx&&x<=cx+Z&&y>=cy&&y<=cy+Z)return i;}return -1;}
 cv.addEventListener('pointerdown',ev=>{
   if(!G||G.over||G.paused)return;ev.preventDefault();
   const[x,y]=toLogical(ev);
@@ -868,8 +1198,8 @@ cv.addEventListener('pointerdown',ev=>{
   if(y>=622&&y<=680){const k=Math.floor((x-10)/69);if(k>=0&&k<5&&x-10-k*69<=64){G.hold={kind:'power',type:G.me.deck[k],x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}return;}
   const i=cellAt('me',x,y);
   if(i>=0&&G.me.dice[i]){G.drag={from:i,x,y,sx:x,sy:y};G.hold={kind:'die',side:'me',i,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);return;}
-  const j=cellAt('bot',x,y);
-  if(j>=0&&G.bot.dice[j]){G.hold={kind:'die',side:'bot',i:j,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}
+  const os=G.pvp?'op':'bot';const j=cellAt(os,x,y);
+  if(j>=0&&G[os].dice[j]){G.hold={kind:'die',side:os,i:j,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}
 });
 cv.addEventListener('pointermove',ev=>{
   if(!G)return;const[x,y]=toLogical(ev);
@@ -890,15 +1220,17 @@ cv.addEventListener('pointerup',endDrag);
 cv.addEventListener('pointercancel',()=>{if(G){G.drag=null;G.hold=null;}});
 
 // ====== 一時停止 ======
-function pause(){if(!G||G.over)return;G.paused=true;G.drag=null;G.hold=null;show('ovPause',true);}
+function pause(){if(!G||G.over)return;G.paused=true;G.drag=null;G.hold=null;
+  document.getElementById('bQuit').textContent=G.pvp?'降参する（負けになります）':'試合をやめる';
+  show('ovPause',true);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 window.addEventListener('pagehide',pause);
 document.getElementById('bResume').onclick=()=>{G.paused=false;show('ovPause',false);last=performance.now();};
-document.getElementById('bQuit').onclick=()=>{show('ovPause',false);G.paused=false;gameOver();};
+document.getElementById('bQuit').onclick=()=>{show('ovPause',false);G.paused=false;if(G.pvp)rankOver('lose',true);else gameOver();};
 
 // ====== 画面切り替え ======
 function show(id,on){document.getElementById(id).classList.toggle(id.startsWith('ov')?'show':'show',on);}
-const SCREENS=['scTitle','scDeck','scGacha','scDice'];
+const SCREENS=['scTitle','scDeck','scGacha','scDice','scRank','scBoard','scVs'];
 function screen(id){SCREENS.forEach(s=>show(s,s===id));}
 document.getElementById('bBot').onclick=()=>{
   decks.me=decks.me.filter(owned);if(decks.bot)decks.bot=decks.bot.filter(owned);
@@ -1014,6 +1346,7 @@ function renderMenu(){
   const c=clearedSt();
   document.getElementById('tGoal').textContent='ステージ '+(c+1)+' クリア';
   document.getElementById('tCleared').textContent=c?'ステージ '+c+' までクリア済み':'まだクリアしたステージはありません';
+  const k=myRank();document.getElementById('tRank').textContent=k?RANK.label(k.pts,k.tier,k.pos)+'・'+RANK.N+'人中 '+k.pos+'位':'';
 }
 window.__onReady=()=>{
   profile=null;renderMenu();
@@ -1027,8 +1360,12 @@ window.__onReady=()=>{
       if(p.botName){botName=p.botName;document.getElementById('botName').value=p.botName;}
       stageSel=(p.cleared||0)+1; // はじめは、まだクリアしていないステージを選んでおく
     }
-    msg('tMsg',r.left?'前回の試合（ウェーブ'+r.left.wave+'）の報酬 +'+r.left.gold+'G を受け取りました':'',r.left?'ok':'');
+    const lines=[];
+    if(r.left)lines.push('前回の試合（ウェーブ'+r.left.wave+'）の報酬 +'+r.left.gold+'G を受け取りました');
+    if(r.rk&&r.rk.left)lines.push('前回のランク戦は途中で終わったため、負けになりました（'+r.rk.left.dp+' RP）');
+    msg('tMsg',lines.join('\n'),lines.length?(r.rk&&r.rk.left?'info':'ok'):'');
     renderMenu();
+    showSeasonReport();
   }).catch(e=>{
     msg('tMsg','データの読み込みに失敗しました\n'+errText(e),'ng');
     const b=document.createElement('button');b.className='btn sec';b.textContent='もう一度読み込む';
@@ -1036,6 +1373,161 @@ window.__onReady=()=>{
   });
 };
 window.__onFail=t=>{profile=null;renderMenu();msg('tMsg',t,'ng');};
+
+// ====== ランク戦（メニュー・順位表・マッチング・対戦準備） ======
+function myRank(){
+  const r=profile&&profile.rank;if(!r)return null;
+  const pos=RANK.position(r.cpu,r.pts);return{pts:r.pts,pos,tier:RANK.tierOf(r.pts,pos),r};
+}
+function badge(el,t){el.textContent=RANK.TIERS[t].k;el.style.background=RANK.TIERS[t].c;}
+function seasonLeftDays(){const d=new Date();const end=new Date(d.getFullYear(),d.getMonth()+1,1);return Math.ceil((end-d)/864e5);}
+function gradesHtml(g){return[['攻め',g.atk],['守り',g.def],['勝率',g.win],['試合数',g.games]].map(([n,v])=>'<div><b style="color:'+(v>=3?'var(--accent)':v<=1?'var(--bad)':'var(--text)')+'">'+RANK.G5[v]+'</b>'+n+'</div>').join('');}
+function renderRank(){
+  const k=myRank();if(!k)return;const r=k.r;
+  badge(document.getElementById('rBadge'),k.tier);
+  document.getElementById('rTier').textContent=RANK.label(k.pts,k.tier,k.pos);
+  document.getElementById('rTier').style.color=RANK.TIERS[k.tier].c;
+  document.getElementById('rPts').textContent=k.pts+' RP';
+  let next='',w=100;
+  if(k.tier<5){const lo=RANK.LO[k.tier],hi=RANK.LO[k.tier+1];w=(k.pts-lo)/(hi-lo)*100;next=RANK.TIERS[k.tier+1].n+'まで あと '+(hi-k.pts)+' RP';}
+  else if(k.tier===5){const lo=RANK.LO[5];w=Math.min(100,(k.pts-lo)/(RANK.MASTER_MIN-lo)*100);
+    next=k.pts<RANK.MASTER_MIN?'ダイスマスターまで あと '+(RANK.MASTER_MIN-k.pts)+' RP（＋上位30人）':'上位30人に入ればダイスマスター！（いま '+k.pos+'位）';}
+  else{const cut=[...r.cpu].sort((a,b)=>b-a)[RANK.TOP-1];next='30位のボーダー：'+Math.round(cut)+' RP';}
+  document.getElementById('rBar').style.width=Math.max(0,Math.min(100,w))+'%';
+  document.getElementById('rNext').textContent=next;
+  document.getElementById('rPos').textContent=RANK.N+'人中 '+k.pos+'位';
+  document.getElementById('rPosSub').textContent='遊ばない間も、ほかのプレイヤーは遊んでいます';
+  document.getElementById('rName').value=r.name||'あなた';
+  const mo=Number(r.season.split('-')[1]);
+  document.getElementById('rSeason').textContent=mo+'月シーズン';
+  document.getElementById('rSeasonLeft').textContent='あと '+seasonLeftDays()+' 日';
+  const g=RANK.grades(r.st);
+  document.getElementById('rGrades').innerHTML=gradesHtml(g);
+  const st=r.st;
+  document.getElementById('rForecast').textContent='今シーズン '+st.g+'試合 '+st.w+'勝 '+st.l+'敗'+(st.d?' '+st.d+'分':'')+
+    '\nこのままシーズンが終わると、ランクは'+(g.drop?g.drop+'段階ダウン':'そのまま')+'。最高ランクのご褒美 '+RANK.SEASON_GOLD[Math.max(r.sMax||0,k.tier)]+'G';
+  document.getElementById('rForecast').style.whiteSpace='pre-wrap';
+}
+document.getElementById('bRank').onclick=()=>{
+  screen('scRank');renderRank();
+  const b1=document.getElementById('bFind'),b2=document.getElementById('bBoard');
+  b1.disabled=b2.disabled=true;msg('rMsg','最新の順位を読み込み中…','info');
+  Cloud().rankRefresh().then(({profile:p,result:x})=>{
+    setProfile(p);renderRank();b1.disabled=b2.disabled=false;
+    msg('rMsg',x&&x.left?'前回のランク戦は途中で終わったため、負けになりました（'+x.left.dp+' RP）':'',x&&x.left?'info':'');
+    showSeasonReport();
+  }).catch(e=>{msg('rMsg','順位を読み込めませんでした\n'+errText(e),'ng');b2.disabled=false;});
+};
+document.getElementById('bRankBack').onclick=()=>{screen('scTitle');renderMenu();};
+// 順位表
+document.getElementById('bBoard').onclick=()=>{
+  const k=myRank();if(!k)return;const r=k.r;
+  const all=r.cpu.map((p,i)=>({p,i,name:RANK.CPU[i].name})).concat([{p:k.pts,i:-1,name:r.name||'あなた'}]);
+  all.sort((a,b)=>b.p-a.p||(a.i<0?-1:b.i<0?1:a.i-b.i));
+  const box=document.getElementById('lbList');box.innerHTML='';let meEl=null;
+  all.forEach((x,n)=>{
+    const pos=n+1,t=RANK.tierOf(x.p,pos);
+    if(n===RANK.TOP){const s=document.createElement('div');s.className='lbsep';s.textContent='▲ ここまでダイスマスター（2000RP以上の上位30人）';box.appendChild(s);}
+    const el=document.createElement('div');el.className='lbrow'+(x.i<0?' me':'');
+    el.innerHTML='<span class="no">'+pos+'</span><span class="badge s" style="width:24px;height:24px;font-size:11px;border-radius:7px;background:'+RANK.TIERS[t].c+'">'+RANK.TIERS[t].k+'</span><span class="nm"></span><span class="pt">'+Math.round(x.p)+'</span>';
+    el.querySelector('.nm').textContent=x.name;
+    box.appendChild(el);if(x.i<0)meEl=el;
+  });
+  screen('scBoard');
+  if(meEl)setTimeout(()=>meEl.scrollIntoView({block:'center'}),30);
+};
+document.getElementById('bBoardBack').onclick=()=>{screen('scRank');renderRank();};
+
+// マッチング：探している演出 → 見つかったら試合中として保存（ここから先に閉じると負け）
+let matchTimer=null,matchTick=null,pendingOpp=null,vsTimer=null;
+function startMatching(){
+  if(!profile)return;
+  const name=(document.getElementById('rName').value||'').trim()||'あなた';
+  document.getElementById('mTitle').textContent='対戦相手を探しています…';
+  document.getElementById('mSpin').textContent='🎲';document.getElementById('mSpin').style.animationPlayState='running';
+  msg('mMsg','');const bc=document.getElementById('bMatchCancel');bc.style.display='';bc.textContent='キャンセル';
+  bc.onclick=()=>{clearTimeout(matchTimer);clearInterval(matchTick);show('ovMatch',false);};
+  show('ovMatch',true);
+  const t0=Date.now();matchTick=setInterval(()=>{document.getElementById('mTime').textContent=mmss((Date.now()-t0)/1000);},250);
+  document.getElementById('mTime').textContent='0:00';
+  matchTimer=setTimeout(()=>{
+    bc.style.display='none';
+    document.getElementById('mTitle').textContent='マッチしました！';
+    document.getElementById('mSpin').style.animationPlayState='paused';
+    msg('mMsg','準備中…','info');
+    Cloud().rankStart({name}).then(({profile:p,result:x})=>{
+      clearInterval(matchTick);setProfile(p);
+      const set=RANK.cpuSetup(x.opp.o,x.opp.pts);
+      pendingOpp={...x.opp,...set,id:x.id};
+      msg('mMsg',x.opp.name+'（'+RANK.label(x.opp.pts,x.opp.tier,x.opp.pos)+'）','ok');
+      setTimeout(()=>{show('ovMatch',false);openVs();},1300);
+    }).catch(e=>{
+      clearInterval(matchTick);
+      document.getElementById('mTitle').textContent='マッチできませんでした';
+      msg('mMsg','試合を始められませんでした（負けにはなっていません）\n'+errText(e),'ng');
+      bc.style.display='';bc.textContent='閉じる';bc.onclick=()=>show('ovMatch',false);
+    });
+  },2500+Math.random()*3500);
+}
+document.getElementById('bFind').onclick=startMatching;
+function openVs(){
+  const o=pendingOpp,k=myRank();
+  decks.me=decks.me.filter(owned);
+  badge(document.getElementById('vMyB'),k.tier);document.getElementById('vMyN').textContent=k.r.name||'あなた';
+  document.getElementById('vMyT').textContent=RANK.label(k.pts,k.tier,k.pos);
+  badge(document.getElementById('vOpB'),o.tier);document.getElementById('vOpN').textContent=o.name;
+  document.getElementById('vOpT').textContent=RANK.label(o.pts,o.tier,o.pos);
+  document.getElementById('vOpDeck').innerHTML=o.deck.map(t=>'<span style="background:'+DICE[t].c+'">'+EMO[t]+'</span>').join('');
+  const avg=o.deck.reduce((a,t)=>a+o.cls[t],0)/5;
+  document.getElementById('vOpLv').textContent='相手のサイコロの平均レベル Lv'+(Math.round(avg*10)/10);
+  screen('scVs');renderVsDeck();
+  let left=30;const b=document.getElementById('bVsStart');b.textContent='対戦開始（'+left+'）';
+  clearInterval(vsTimer);
+  vsTimer=setInterval(()=>{left--;b.textContent='対戦開始（'+left+'）';if(left<=0){clearInterval(vsTimer);beginRanked();}},1000);
+}
+function renderVsDeck(){
+  const deck=decks.me;
+  document.getElementById('vDeckInfo').textContent='自分のデッキ '+deck.length+' / 5';
+  const g=document.getElementById('vGrid');g.innerHTML='';
+  for(const t of ALL){
+    const d=DICE[t];const el=document.createElement('div');const idx=deck.indexOf(t);const own=owned(t);
+    el.className='die'+(idx>=0?' sel':'')+(own?'':' lock');
+    el.innerHTML=(idx>=0?'<span class="num">'+(idx+1)+'</span>':'')+'<div class="sw" style="background:'+d.c+'">'+EMO[t]+'</div>'+d.n+(own?'<div class="lv">Lv'+dieLv(t)+'</div>':'<div class="rar">未所持</div>');
+    el.onclick=()=>{if(!own)return;const k=deck.indexOf(t);if(k>=0)deck.splice(k,1);else if(deck.length<5)deck.push(t);
+      document.getElementById('vDesc').textContent=d.n+'：'+d.d;renderVsDeck();};
+    g.appendChild(el);
+  }
+}
+document.getElementById('bVsAuto').onclick=()=>{decks.me=autoDeck(null,decks.me);renderVsDeck();
+  document.getElementById('vDesc').textContent='おまかせ：'+decks.me.map(t=>DICE[t].n).join('・');};
+document.getElementById('bVsStart').onclick=beginRanked;
+function beginRanked(){
+  clearInterval(vsTimer);if(!pendingOpp)return;
+  if(decks.me.length!==5)decks.me=autoDeck(null,decks.me);
+  const o=pendingOpp;pendingOpp=null;
+  SCREENS.forEach(s=>show(s,false));
+  newRanked(o);G.matchId=o.id;last=performance.now();
+}
+document.getElementById('bRankAgain').onclick=()=>{show('ovRank',false);G=null;screen('scRank');renderRank();startMatching();};
+document.getElementById('bRankMenu').onclick=()=>{show('ovRank',false);G=null;document.getElementById('bRank').onclick();};
+// シーズン終了の成績表
+function showSeasonReport(){
+  const rp=profile&&profile.rank&&profile.rank.report;if(!rp)return;
+  const mo=Number(rp.season.split('-')[1]);
+  document.getElementById('sTitle').textContent=mo+'月シーズン終了';
+  document.getElementById('sGrades').innerHTML=gradesHtml(rp.g);
+  document.getElementById('sBody').innerHTML='';
+  const body=document.getElementById('sBody');
+  body.textContent=rp.games+'試合 '+rp.wins+'勝　合計 '+rp.g.total+' / 16点\n'
+    +'だから '+(rp.drop?rp.drop+'段階ダウン':'ランクはそのまま')+'：'+RANK.TIERS[rp.tier].n+' → '+RANK.TIERS[rp.newTier].n+'\n'
+    +'最高ランク（'+RANK.TIERS[rp.best].n+'）のご褒美 +'+rp.gold+'G';
+  body.style.whiteSpace='pre-wrap';
+  msg('sMsg','');show('ovSeason',true);
+  const b=document.getElementById('bSeasonOk');b.disabled=false;
+  b.onclick=()=>{b.disabled=true;Cloud().rankSeen().then(({profile:p})=>{setProfile(p);show('ovSeason',false);renderMenu();})
+    .catch(e=>{b.disabled=false;msg('sMsg','保存できませんでした（ご褒美は受け取り済みです）\n'+errText(e),'ng');
+      b.onclick=()=>show('ovSeason',false);});};
+}
 
 // ====== ガチャ ======
 const BY_RARITY={};ALL.forEach(t=>(BY_RARITY[DICE[t].r]=BY_RARITY[DICE[t].r]||[]).push(t));
@@ -1094,7 +1586,7 @@ function loop(now){
 requestAnimationFrame(loop);
 
 // テスト用（画面には影響しません）
-window.__dice={get G(){return G;},update,newGame,decks,summon,merge,botAct,session,get profile(){return profile;},setProfile,gameOver};
+window.__dice={get G(){return G;},update,newGame,newRanked,rankOver,decks,summon,merge,botAct,session,get profile(){return profile;},setProfile,gameOver};
 })();
 </script>
 <!-- ====== 保存（Claudeのクラウド保存：Artifact の db） ====== -->
@@ -1104,7 +1596,7 @@ window.__dice={get G(){return G;},update,newGame,decks,summon,merge,botAct,sessi
 const GACHA_COST = 100;
 const RATES = [["ノーマル", 60], ["レア", 28], ["エピック", 10], ["伝説", 2]];
 const START_DICE = ["fire", "elec", "wind", "poison", "ice"];
-const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match", "cleared"];
+const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match", "cleared", "rank"];
 const STAGE_WAVES = 10, FIRST_CLEAR_BONUS = 100;
 
 // 保存データ data/users/<自分のid>/profile（自分専用・ほかの人からは見えない）
@@ -1152,9 +1644,104 @@ function settle(n) {
   return { wave, gold, stage, first };
 }
 
+// ====== ランク戦の保存データ ======
+// rank: { name, pts(自分のRP), season("2026-11"), last(CPUを進めた時刻), cpu:[300人のRP],
+//         maxTier(今までの最高), sMax(今シーズンの最高), st(今シーズンの成績), match(試合中), report(シーズン結果・未確認) }
+const R = window.RANK;
+const seasonKey = t => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); };
+const seasonEnd = key => { const [y, m] = key.split("-").map(Number); return new Date(y, m, 1).getTime(); };
+const seasonBegin = key => { const [y, m] = key.split("-").map(Number); return new Date(y, m - 1, 1).getTime(); };
+const emptySt = () => ({ g: 0, w: 0, l: 0, d: 0, kn: 0, kp: 0, lk: 0, sec: 0 });
+const r1 = v => Math.round(v * 10) / 10;
+const initCpu = () => R.CPU.map(c => r1(c.T * 0.85 * (0.9 + 0.2 * Math.random())));
+function randn() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+// 遊んでいない間もCPUは遊んでいる：経過時間ぶんRPを進める（1時間ごとにまとめて）
+function simCpu(r, to) {
+  let d = (to - r.last) / 864e5;
+  if (d < 1 / 24) return;
+  d = Math.min(d, 31);
+  r.cpu = r.cpu.map((p, i) => {
+    const c = R.CPU[i];
+    const g = R.clamp(14 + 0.06 * (c.T - p), -15, 45);
+    return Math.max(0, r1(p + c.act * g * d + randn() * 30 * Math.sqrt(d) * c.act));
+  });
+  r.last = to;
+}
+function cpuInfo(r, o) { const pos = R.cpuPos(r.cpu, o, r.pts); return { o, name: R.CPU[o].name, pts: Math.round(r.cpu[o]), pos, tier: R.tierOf(r.cpu[o], pos) }; }
+// 試合の結果を反映（st が null のときは途中で閉じた＝負け）
+function applyRank(n, outcome, st) {
+  const r = n.rank, m = r.match; if (!m) return null;
+  const posB = R.position(r.cpu, r.pts), tB = R.tierOf(r.pts, posB);
+  const o = m.o, op = r.cpu[o], opT = cpuInfo(r, o).tier;
+  let dp = 0;
+  if (outcome === "win") {
+    dp = 20 + R.clamp(Math.round((op - r.pts) / 50), -5, 8) + Math.min(2, (st && st.left) || 0);
+    r.cpu[o] = Math.max(0, r1(op - R.LOSS[opT]));
+  } else if (outcome === "lose") {
+    dp = -R.LOSS[tB];
+    r.cpu[o] = r1(op + 20);
+  }
+  r.pts = Math.max(0, r.pts + dp);
+  r.st.g++;
+  if (outcome === "win") r.st.w++; else if (outcome === "lose") r.st.l++; else r.st.d++;
+  if (st) { r.st.kn += st.kn || 0; r.st.kp = r1((r.st.kp + (st.kp || 0)) * 10) / 10; r.st.lk += st.lk || 0; r.st.sec += st.sec || 0; }
+  else { r.st.lk += 3; r.st.sec += 60; }
+  const posA = R.position(r.cpu, r.pts), tA = R.tierOf(r.pts, posA);
+  const gold = outcome === "win" ? R.WIN_GOLD[tA] : 0;
+  let bonus = 0; for (let t = (r.maxTier || 0) + 1; t <= tA; t++) bonus += R.FIRST[t];
+  r.maxTier = Math.max(r.maxTier || 0, tA); r.sMax = Math.max(r.sMax || 0, tA);
+  n.gold += gold + bonus; r.match = null;
+  return { outcome, dp, pts: r.pts, posB, posA, tB, tA, gold, bonus, opName: R.CPU[o].name, abandoned: !st };
+}
+// シーズンの区切り：成績で0〜3段階下げ、最高ランクのご褒美、CPUもやり直し
+function closeSeason(n, now) {
+  const r = n.rank;
+  simCpu(r, Math.max(r.last, seasonEnd(r.season)));
+  const pos = R.position(r.cpu, r.pts), tier = R.tierOf(r.pts, pos);
+  const g = R.grades(r.st), newTier = Math.max(0, tier - g.drop), best = Math.max(r.sMax || 0, tier);
+  const gold = R.SEASON_GOLD[best]; n.gold += gold;
+  r.report = { season: r.season, g, tier, newTier, drop: g.drop, best, gold, pos, games: r.st.g, wins: r.st.w };
+  r.pts = R.LO[newTier];
+  r.season = seasonKey(now); r.cpu = initCpu(); r.last = seasonBegin(r.season);
+  r.st = emptySt(); r.sMax = newTier;
+}
+function rankTick(n, now, settleLeft) {
+  if (!n.rank) n.rank = { name: "あなた", pts: 0, season: seasonKey(now), last: now, cpu: initCpu(), maxTier: 0, sMax: 0, st: emptySt(), match: null, report: null };
+  const r = n.rank; let left = null;
+  if (settleLeft && r.match) left = applyRank(n, "lose", null);
+  if (r.season !== seasonKey(now)) closeSeason(n, now);
+  simCpu(r, now);
+  return { left };
+}
+
 window.Cloud = {
   // 読み込み（はじめての人はデータを作る。前回途中で閉じた試合があれば報酬を確定）
-  load() { return commit(n => ({ left: settle(n) })); },
+  load() { return commit(n => ({ left: settle(n), rk: rankTick(n, Date.now(), true) })); },
+  rankRefresh() { return commit(n => rankTick(n, Date.now(), true)); },
+  // 相手を決めて「試合中」として保存。自分のRPに近い人から選ぶ
+  rankStart({ name }) {
+    return commit(n => {
+      const now = Date.now();
+      const tk = rankTick(n, now, true);
+      const r = n.rank; r.name = String(name || "あなた").slice(0, 12);
+      const near = r.cpu.map((p, i) => ({ i, d: Math.abs(p - r.pts) })).sort((a, b) => a.d - b.d).slice(0, 10);
+      const o = near[Math.floor(Math.pow(Math.random(), 1.6) * near.length)].i;
+      const id = now.toString(36) + Math.random().toString(36).slice(2, 6);
+      r.match = { id, o, t0: now };
+      return { id, opp: cpuInfo(r, o), left: tk.left };
+    });
+  },
+  rankFinish(id, outcome, st) {
+    return commit(n => {
+      if (!n.rank || !n.rank.match || n.rank.match.id !== id) return null; // すでに保存済み
+      const now = Date.now();
+      const x = applyRank(n, outcome, st);
+      if (n.rank.season !== seasonKey(now)) closeSeason(n, now);
+      simCpu(n.rank, now);
+      return x;
+    });
+  },
+  rankSeen() { return commit(n => { if (n.rank) n.rank.report = null; }); },
   startMatch({ deckMe, deckBot, botName, stage }) {
     return commit(n => {
       const left = settle(n);
