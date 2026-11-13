@@ -198,6 +198,9 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <div class="card help">
     <b style="color:var(--text)">ランク戦のルール</b>
     ・上が相手、下があなた。道は別々で、同じ敵が両方に来ます。先にハート3つがなくなった方の負け<br>
+    ・<b>敵を倒すと「ため」がたまります。真ん中のバーをタップすると、たまった分の敵を相手の道に送れます</b><br>
+    ・相手から送られてくる敵は、バーに数と残り秒数が出ます。ためている分で自動で打ち消せます（打ち消せなかった分だけ来る）<br>
+    ・送る量に上限はありませんが、1ウェーブで道に出てくる量には上限があり、あふれた分は次のウェーブに来ます。大きな1体にまとめた巨大な敵はウェーブ11から<br>
     ・時間がたつほど敵が強くなり、7分を過ぎると「サドンデス」で一気に強くなります<br>
     ・勝つと約+20RP。負けるとランクが高いほど多く減ります（ウッドは減りません）<br>
     ・<b>マッチした後に閉じたり、試合の途中でやめると負け</b>になります<br>
@@ -491,7 +494,75 @@ function newRanked(o){
     wave:0,lives:3,opLives:3,spawnQ:[],spawnT:0,waveT:3.5,running:true,paused:false,over:false,
     time:0,botT:1.2,opT:1.5,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,
     parts:[],texts:[],meteors:[],shake:0,flash:0,banner:'3秒後にスタート',bannerT:3.2,sd:false,
-    st:{kn:0,kp:0,lk:0}};
+    st:{kn:0,kp:0,lk:0,sent:0},
+    // 送り合い：stock＝ためた分、inc＝送られてくる予定（u体ぶん・t秒後）、budget＝このウェーブでまだ出せる量
+    stock:{me:0,op:0},inc:{me:[],op:[]},budget:{me:0,op:0},sendQ:{me:[],op:[]},sendT:{me:0,op:0},
+    cpuSendT:3,cancelT:{me:0,op:0},sendFx:0};
+}
+// ====== 送り合い（ランク戦） ======
+const SEND_WARN=6;      // 送ってから相手の道に出てくるまでの秒数
+const SEND_LATE=11;     // このウェーブから巨大な敵（20体ぶん）を送れる
+const KILL_VAL={normal:1,fast:1,tank:2,boss:5}; // 倒したときにたまる量
+const SEND_BACK=0.5;    // 送られてきた敵を倒したときにたまる量（体数ぶん×これ）
+const SEND_HP=1;        // 送る敵の体力（ふつうの敵1体ぶん×体数×これ）
+const sendCap=w=>8+Math.floor(w/2); // 1ウェーブで道に出てくる上限（体数ぶん）
+const otherSide=s=>s==='me'?'op':'me';
+const incTotal=s=>G.inc[s].reduce((a,x)=>a+x.u,0);
+// 体数ぶん → まとめ方（巨大20・大5・小1）
+function lumps(u,late){const out=[];while(late&&u>=20){out.push(20);u-=20;}while(u>=5){out.push(5);u-=5;}while(u>=1){out.push(1);u--;}return out;}
+function countSym(u,late){const g=late?Math.floor(u/20):0;u-=g*20;const b=Math.floor(u/5);return{g,b,s:u-b*5};}
+function sendAttack(side){
+  const n=Math.floor(G.stock[side]);if(n<1)return false;
+  G.stock[side]-=n;const to=otherSide(side);
+  G.inc[to].push({u:n,t:SEND_WARN,T:SEND_WARN,wait:false});
+  if(side==='me'){G.st.sent+=n;G.sendFx=0.6;popText(W/2,210,n+'体ぶん送った！','#7dffa8',16);}
+  else note('相手が'+n+'体ぶん送ってきた！');
+  return true;
+}
+function spawnSent(side,u){
+  const w=Math.max(1,G.wave),unit=enemyHP(w)*PVP_HP*pvpHpMul();
+  const hp=unit*u*SEND_HP,big=u>=20?2:u>=5?1:0;
+  const e={type:'sent',units:u,big,hp,maxhp:hp,speed:[52,40,30][big]*(G.sd?1.25:1),size:[9,14,19][big],dist:0,slow:0,slowT:0,poison:0,poisonT:0,
+    lifeDmg:big===2?2:1,sp:Math.round((10+w)*u*0.5),skillT:99,x:0,y:0,hitT:0,side};
+  [e.x,e.y]=enemyPos(e);G.enemies.push(e);
+}
+function updateSend(dt){
+  for(const side of ['me','op']){
+    // ためた分と送られてくる分は自動で打ち消し合う
+    const c=Math.min(Math.floor(G.stock[side]),incTotal(side));
+    if(c>0){
+      G.stock[side]-=c;let left=c;
+      for(const x of G.inc[side]){const k=Math.min(left,x.u);x.u-=k;left-=k;if(!left)break;}
+      G.inc[side]=G.inc[side].filter(x=>x.u>0);
+      if(side==='me'&&G.cancelT.me<=0){popText(W/2,300,'打ち消し！ −'+c,'#7fe3ff',16);G.cancelT.me=0.5;}
+    }
+    if(G.cancelT[side]>0)G.cancelT[side]-=dt;
+    // 時間がきたら道に出す（1ウェーブの上限まで。あふれた分は次のウェーブへ）
+    for(const x of G.inc[side]){
+      x.t-=dt;if(x.t>0)continue;
+      const n=Math.min(x.u,G.budget[side]);
+      if(n>0){G.budget[side]-=n;x.u-=n;G.sendQ[side].push(...lumps(n,G.wave>=SEND_LATE));}
+      if(x.u>0){x.wait=true;x.t=G.waveT+0.5;x.T=x.t;}
+    }
+    G.inc[side]=G.inc[side].filter(x=>x.u>0);
+    if(G.sendQ[side].length){G.sendT[side]-=dt;if(G.sendT[side]<=0){spawnSent(side,G.sendQ[side].shift());G.sendT[side]=0.7;}}
+  }
+  // 相手CPUが送るかどうか考える
+  G.cpuSendT-=dt;if(G.cpuSendT<=0){G.cpuSendT=0.5+Math.random()*0.5;cpuSend('op',G.opp.s||0,G.opp.miss||0);}
+  if(G.autoMe&&G.autoSendS!=null){G.autoSendT=(G.autoSendT||0)-dt;if(G.autoSendT<=0){G.autoSendT=0.75;cpuSend('me',G.autoSendS,0);}}
+}
+// CPUの送り方：ランクが低いほど「自分の道がすいているときに少しずつ」、高いほど「ためらわず大きくためて一気に」
+function cpuSend(side,s,miss){
+  s=Math.min(1,Math.max(0,s));
+  if(Math.random()<miss*0.6)return;            // ぼーっとして送り忘れる
+  const th=Math.round(2+18*s*s);               // これだけたまったら送る（下位2体ぶん〜上位20体ぶん）
+  const gate=0.3+0.8*s;                         // 自分の道がこれより危ないときは送らない（上位は気にしない）
+  const n=Math.floor(G.stock[side]);if(n<1)return;
+  if(danger(side)>gate)return;
+  // 上位ほど「相手のためが少ないすき」を狙う（打ち消されにくい）
+  const opSt=Math.floor(G.stock[otherSide(side)]);
+  const smart=s>0.45&&opSt<=2&&n>=Math.max(3,th*0.4);
+  if(n>=th||smart||(G.sd&&n>=Math.ceil(th/2)))sendAttack(side);
 }
 const summonCost=s=>10+s.summons*10;
 const powerCost=(s,t)=>s.lvl[t]>=5?Infinity:s.lvl[t]*100;
@@ -576,6 +647,7 @@ function startWavePvp(){
     if(w>=3&&r<0.25)t='fast';else if(w>=5&&r>0.82)t='tank';q.push({type:t});}}
   G.spawnQ=q;G.spawnT=0;G.spawnInt=Math.min(0.75,(PVP_WAVE_T-5)/q.length);
   if(w>1){const bonus=20+(w-1)*10;G.me.sp+=bonus;G.op.sp+=bonus;}
+  G.budget.me=G.budget.op=sendCap(w); // 送られた敵が道に出てくる上限をリセット
   G.banner=boss?'ボス ウェーブ '+w:'ウェーブ '+w;G.bannerT=1.4;
 }
 function startWave(){
@@ -638,7 +710,8 @@ function damage(e,amt){
   if(e.hp<=0)return;
   e.hp-=amt;e.hitT=0.08;
   if(e.hp<=0){
-    if(G.pvp){G[e.side].sp+=e.sp;if(e.side==='me'){G.st.kn++;G.st.kp+=Math.min(1,e.dist/PATH_LEN);}}
+    if(G.pvp){G[e.side].sp+=e.sp;G.stock[e.side]+=e.type==='sent'?e.units*SEND_BACK:(KILL_VAL[e.type]||1);
+      if(e.side==='me'&&e.type!=='sent'){G.st.kn++;G.st.kp+=Math.min(1,e.dist/PATH_LEN);}}
     else{G.me.sp+=e.sp;G.bot.sp+=e.sp;}
     burst(e.x,e.y,e.type==='boss'?'#ffcc4d':'#e8e8f0',e.type==='boss'?36:5,{spd:e.type==='boss'?180:70,life:e.type==='boss'?0.9:0.3,size:e.type==='boss'?4:2});
     if(e.type==='boss'){say(pick(LINES.bossDown),2);G.fx.push({k:'ring',x:e.x,y:e.y,t:0.6,c:'#ffcc4d',r:60});
@@ -677,6 +750,8 @@ function update(dt){
     G.waveT-=dt;if(G.waveT<=0){startWave();G.waveT=PVP_WAVE_T;}
     if(G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){const sp=G.spawnQ.shift();spawnEnemy(sp,'me');spawnEnemy(sp,'op');G.spawnT=G.spawnInt;}}
     if(G.bannerT>0)G.bannerT-=dt;
+    if(G.sendFx>0)G.sendFx-=dt;
+    if(G.wave>0)updateSend(dt);
   }
   else if(G.breakT>0){G.breakT-=dt;if(G.breakT<=0)startWave();}
   else{
@@ -981,12 +1056,8 @@ function draw(){
     ctx.strokeStyle='#352a4f';ctx.lineWidth=18;ctx.lineJoin='round';ctx.lineCap='butt';
     ctx.beginPath();PATH_OP.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
     ctx.fillStyle='#ff6b6b';ctx.font='bold 9px sans-serif';ctx.textAlign='right';ctx.fillText('出口▶',W-4,212);
-    ctx.strokeStyle='#3a3f73';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,243);ctx.lineTo(W-10,243);ctx.stroke();
-    ctx.fillStyle='#14162b';rr(W/2-22,234,44,18,9);ctx.fill();
-    ctx.fillStyle='#ffcc4d';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText('VS',W/2,247);
-    ctx.textAlign='left';ctx.fillStyle='#a3a7d1';ctx.font='bold 11px sans-serif';ctx.fillText('あなた',14,248);
-    for(let i=0;i<3;i++){ctx.fillStyle=i<G.lives?'#ff6b6b':'#3a3f73';heart(62+i*17,243,6);}
-    ctx.textAlign='right';ctx.fillStyle=G.sd?'#ff6b6b':'#a3a7d1';ctx.fillText((G.sd?'サドンデス ':'')+mmss(G.time),W-14,248);
+    ctx.textAlign='left';ctx.fillStyle='#a3a7d1';ctx.font='bold 9px sans-serif';ctx.fillText('あなた',12,236);
+    for(let i=0;i<3;i++){ctx.fillStyle=i<G.lives?'#ff6b6b':'#3a3f73';heart(18+i*16,248,6);}
   }
   // 道
   ctx.strokeStyle='#2c3060';ctx.lineWidth=34;ctx.lineJoin='round';ctx.lineCap='butt';
@@ -998,7 +1069,12 @@ function draw(){
     const small=e0.side==='op';const e=small?{...e0,size:e0.size*0.6}:e0;
     const col=e.type==='boss'?'#e04848':e.type==='fast'?'#ffd166':e.type==='tank'?'#8d6bd1':'#e8e8f0';
     ctx.fillStyle=e.hitT>0?'#fff':col;
-    if(e.type==='tank'){rr(e.x-e.size,e.y-e.size,e.size*2,e.size*2,4);ctx.fill();}
+    if(e.type==='sent'){ // 送られてきた敵：小＝丸、大＝二重丸、巨大＝星
+      ctx.fillStyle=e.hitT>0?'#fff':'#ff8a3c';
+      if(e.big===2)star(e.x,e.y,e.size*1.25);else{ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,Math.PI*2);ctx.fill();}
+      if(e.big===1){ctx.strokeStyle='#ffd0a8';ctx.lineWidth=small?1.5:2.5;ctx.beginPath();ctx.arc(e.x,e.y,e.size+(small?2:4),0,Math.PI*2);ctx.stroke();}
+    }
+    else if(e.type==='tank'){rr(e.x-e.size,e.y-e.size,e.size*2,e.size*2,4);ctx.fill();}
     else if(e.type==='fast'){ctx.beginPath();ctx.moveTo(e.x+e.size,e.y);ctx.lineTo(e.x-e.size,e.y-e.size);ctx.lineTo(e.x-e.size,e.y+e.size);ctx.closePath();ctx.fill();}
     else{ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,Math.PI*2);ctx.fill();}
     if(e.slow>0||e.poisonT>0){ // 凍り＝青、毒＝緑に染まる
@@ -1015,6 +1091,7 @@ function draw(){
       ctx.fillRect(e.x-bw/2,by,bw*r,e.type==='boss'?5:3);
     }
     if(small&&e.type!=='boss')continue;
+    if(e.type==='sent'&&!e.big){continue;}
     ctx.font=(e.type==='boss'?(small?'bold 9px':'bold 12px'):'bold 9px')+' sans-serif';ctx.textAlign='center';
     if(e.type==='boss'){ctx.lineWidth=3;ctx.strokeStyle='#5a1010';ctx.strokeText(short(e.hp),e.x,e.y+4);}
     ctx.fillStyle=e.type==='boss'?'#fff':'#14162b';ctx.fillText(short(e.hp),e.x,e.y+(e.type==='boss'?4:3));
@@ -1102,11 +1179,54 @@ function draw(){
     ctx.lineWidth=3;ctx.strokeStyle='rgba(10,11,25,.85)';ctx.strokeText(t.text,t.x,t.y);ctx.fillStyle=t.c;ctx.fillText(t.text,t.x,t.y);
   }
   ctx.globalAlpha=1;
+  if(G.pvp)drawSendBar(); // 送り合いのバーは数字や演出より上に出す
   ctx.restore();
   if(G.flash>0){ctx.fillStyle='rgba(255,60,60,'+(G.flash*0.5)+')';ctx.fillRect(0,0,W,H);}
   // 長押しの説明カード（いちばん上に表示）
   const info=holdInfo();
   if(info)drawInfo(info);
+}
+// 記号で体数を表す：★＝20体ぶん（ウェーブ11から）、二重丸＝5体ぶん、丸＝1体
+function syms(u,x,y,align,k=1){
+  const c=countSym(u,G.wave>=SEND_LATE),parts=[];
+  if(c.g)parts.push(['g',c.g]);if(c.b)parts.push(['b',c.b]);if(c.s)parts.push(['s',c.s]);
+  if(!parts.length){ctx.textAlign=align;ctx.fillStyle='#6b6f9e';ctx.font='bold '+Math.round(11*k)+'px sans-serif';ctx.fillText('なし',x,y+4);return 0;}
+  ctx.font='bold '+Math.round(12*k)+'px sans-serif';
+  const wOf=p=>14*k+ctx.measureText('×'+p[1]).width+6*k;
+  const total=parts.reduce((a,p)=>a+wOf(p),0);let cx=align==='right'?x-total:align==='center'?x-total/2:x;
+  for(const p of parts){
+    ctx.fillStyle='#ff8a3c';
+    if(p[0]==='g')star(cx+6*k,y,8*k);
+    else{ctx.beginPath();ctx.arc(cx+6*k,y,(p[0]==='b'?6:3.5)*k,0,Math.PI*2);ctx.fill();
+      if(p[0]==='b'){ctx.strokeStyle='#ffd0a8';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx+6*k,y,8*k,0,Math.PI*2);ctx.stroke();}}
+    ctx.textAlign='left';ctx.fillStyle='#f2f3ff';ctx.fillText('×'+p[1],cx+14*k,y+4*k);cx+=wOf(p);
+  }
+  return total;
+}
+// 上下の道のあいだのバー：ためた分（タップで送る）／送られてくる分（残り秒数・直前に赤く点滅）
+function drawSendBar(){
+  const x=62,y=231,w=W-70,h=23,inc=incTotal('me'),st=Math.floor(G.stock.me);
+  if(inc>0){
+    const e0=G.inc.me.reduce((a,b)=>b.t<a.t?b:a),near=!e0.wait&&e0.t<=3,blink=near&&Math.sin(G.time*18)>0;
+    ctx.fillStyle=blink?'#b3262f':'#4a1d26';rr(x,y,w,h,10);ctx.fill();
+    ctx.fillStyle='rgba(255,107,107,.35)';rr(x,y,Math.max(10,w*(e0.wait?1:Math.min(1,e0.t/e0.T))),h,10);ctx.fill();
+    ctx.strokeStyle=near?'#ff6b6b':'#7a3340';ctx.lineWidth=2;rr(x,y,w,h,10);ctx.stroke();
+    ctx.textAlign='left';ctx.fillStyle='#ff9a9a';ctx.font='bold 12px sans-serif';ctx.fillText('⚠ 来る',x+8,y+16);
+    syms(inc,x+58,y+11,'left',0.9);
+    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';
+    ctx.fillText(e0.wait?'次のウェーブ':'あと'+Math.ceil(e0.t)+'秒',x+w-8,y+16);
+  }else if(st>0){
+    const glow=0.6+0.4*Math.sin(G.time*5);
+    ctx.fillStyle=G.sendFx>0?'#7dffa8':'#1f4a36';rr(x,y,w,h,10);ctx.fill();
+    ctx.strokeStyle='rgba(125,255,168,'+glow+')';ctx.lineWidth=2;rr(x,y,w,h,10);ctx.stroke();
+    ctx.textAlign='left';ctx.fillStyle='#7dffa8';ctx.font='bold 12px sans-serif';ctx.fillText('ため',x+8,y+16);
+    syms(st,x+42,y+11,'left',0.9);
+    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.fillText('タップで送る ▶',x+w-8,y+16);
+  }else{
+    ctx.fillStyle=G.sendFx>0?'#7dffa8':'#22264a';rr(x,y,w,h,10);ctx.fill();
+    ctx.textAlign='center';ctx.fillStyle='#a3a7d1';ctx.font='bold 12px sans-serif';
+    ctx.fillText(G.wave<1?'敵を倒すと「ため」がたまる → タップで相手に送る':'敵を倒すと「ため」がたまります',x+w/2,y+16,w-16);
+  }
 }
 // ランク戦の上半分：相手の名前・ランク・ハート、相手の盤面
 function drawPvpTop(){
@@ -1121,6 +1241,14 @@ function drawPvpTop(){
   ctx.fillText('ウェーブ',14,80);ctx.fillStyle='#f2f3ff';ctx.font='bold 18px sans-serif';ctx.fillText(Math.max(1,G.wave),14,100);
   ctx.fillStyle='#a3a7d1';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
   ctx.fillText('相手のSP',W-14,80);ctx.fillStyle='#f2f3ff';ctx.font='bold 14px sans-serif';ctx.fillText(Math.floor(G.op.sp),W-14,98);
+  ctx.textAlign='left';ctx.fillStyle=G.sd?'#ff6b6b':'#a3a7d1';ctx.font='bold 11px sans-serif';
+  ctx.fillText(G.sd?'サドンデス':'時間',14,124);ctx.font='bold 13px sans-serif';ctx.fillText(mmss(G.time),14,140);
+  // 相手のため／あなたが送った分
+  ctx.textAlign='right';ctx.fillStyle='#a3a7d1';ctx.font='bold 10px sans-serif';ctx.fillText('相手のため',W-14,118);
+  ctx.fillStyle='#ff8a3c';ctx.font='bold 13px sans-serif';ctx.fillText(Math.floor(G.stock.op)+'体',W-14,133);
+  const og=incTotal('op');
+  if(og>0){const x0=G.inc.op.reduce((a,b)=>b.t<a.t?b:a);ctx.fillStyle='#7dffa8';ctx.font='bold 10px sans-serif';
+    ctx.fillText('送った'+og+'体',W-14,147);ctx.font='9px sans-serif';ctx.fillText(x0.wait?'次のウェーブ':'あと'+Math.ceil(x0.t)+'秒',W-14,158);}
   drawBoard('op');
 }
 function holdInfo(){
@@ -1195,6 +1323,7 @@ cv.addEventListener('pointerdown',ev=>{
   const[x,y]=toLogical(ev);
   if(x>W-72&&y<48){pause();return;}
   if(y>=690&&y<=748&&x>=BX&&x<=W-BX){summon('me');return;}
+  if(G.pvp&&y>=226&&y<=260&&x>=58){if(!sendAttack('me'))note('まだたまっていません（敵を倒すとたまる）');return;}
   if(y>=622&&y<=680){const k=Math.floor((x-10)/69);if(k>=0&&k<5&&x-10-k*69<=64){G.hold={kind:'power',type:G.me.deck[k],x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}return;}
   const i=cellAt('me',x,y);
   if(i>=0&&G.me.dice[i]){G.drag={from:i,x,y,sx:x,sy:y};G.hold={kind:'die',side:'me',i,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);return;}
