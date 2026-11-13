@@ -1477,9 +1477,9 @@ function openVs(){
   document.getElementById('vMyT').textContent=RANK.label(k.pts,k.tier,k.pos);
   badge(document.getElementById('vOpB'),o.tier);document.getElementById('vOpN').textContent=o.name;
   document.getElementById('vOpT').textContent=RANK.label(o.pts,o.tier,o.pos);
-  document.getElementById('vOpDeck').innerHTML=o.deck.map(t=>'<span style="background:'+DICE[t].c+'">'+EMO[t]+'</span>').join('');
-  const avg=o.deck.reduce((a,t)=>a+o.cls[t],0)/5;
-  document.getElementById('vOpLv').textContent='相手のサイコロの平均レベル Lv'+(Math.round(avg*10)/10);
+  // 相手のデッキは対戦が始まるまでのお楽しみ（盤面に出てきて初めて分かる）
+  document.getElementById('vOpDeck').innerHTML=o.deck.map(()=>'<span style="background:var(--panel2);color:var(--muted);font-weight:800">？</span>').join('');
+  document.getElementById('vOpLv').textContent='対戦が始まると、相手の盤面に出てきたサイコロで分かります';
   screen('scVs');renderVsDeck();
   let left=30;const b=document.getElementById('bVsStart');b.textContent='対戦開始（'+left+'）';
   clearInterval(vsTimer);
