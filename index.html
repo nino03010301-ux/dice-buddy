@@ -198,9 +198,9 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <div class="card help">
     <b style="color:var(--text)">ランク戦のルール</b>
     ・上が相手、下があなた。道は別々で、同じ敵が両方に来ます。先にハート3つがなくなった方の負け<br>
-    ・<b>敵を倒すと「ため」がたまります。真ん中のバーをタップすると、たまった分の敵を相手の道に送れます</b><br>
-    ・相手から送られてくる敵は、バーに数と残り秒数が出ます。ためている分で自動で打ち消せます（打ち消せなかった分だけ来る）<br>
-    ・送る量に上限はありませんが、1ウェーブで道に出てくる量には上限があり、あふれた分は次のウェーブに来ます。大きな1体にまとめた巨大な敵はウェーブ11から<br>
+    ・<b>敵を倒すと、倒した分だけ自動で相手の道に敵が送られます</b>（操作はいりません）<br>
+    ・相手から送られてくる敵は、真ん中のバーに数と残り秒数が出ます。来るまでに敵を倒すと、その分だけ自動で減らせます<br>
+    ・1ウェーブで道に出てくる量には上限があり、あふれた分は次のウェーブに来ます。たくさん来ると大きな1体にまとまります（★の巨大な敵はウェーブ11から）<br>
     ・時間がたつほど敵が強くなり、7分を過ぎると「サドンデス」で一気に強くなります<br>
     ・勝つと約+20RP。負けるとランクが高いほど多く減ります（ウッドは減りません）<br>
     ・<b>マッチした後に閉じたり、試合の途中でやめると負け</b>になります<br>
@@ -495,9 +495,9 @@ function newRanked(o){
     time:0,botT:1.2,opT:1.5,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,
     parts:[],texts:[],meteors:[],shake:0,flash:0,banner:'3秒後にスタート',bannerT:3.2,sd:false,
     st:{kn:0,kp:0,lk:0,sent:0},
-    // 送り合い：stock＝ためた分、inc＝送られてくる予定（u体ぶん・t秒後）、budget＝このウェーブでまだ出せる量
+    // 送り合い：stock＝倒した分（まず自分に来る敵を減らし、残りはすぐ相手へ）、inc＝送られてくる予定（u体ぶん・t秒後）、budget＝このウェーブでまだ出せる量
     stock:{me:0,op:0},inc:{me:[],op:[]},budget:{me:0,op:0},sendQ:{me:[],op:[]},sendT:{me:0,op:0},
-    cpuSendT:3,cancelT:{me:0,op:0},sendFx:0};
+    cancelT:{me:0,op:0}};
 }
 // ====== 送り合い（ランク戦） ======
 const SEND_WARN=6;      // 送ってから相手の道に出てくるまでの秒数
@@ -511,14 +511,6 @@ const incTotal=s=>G.inc[s].reduce((a,x)=>a+x.u,0);
 // 体数ぶん → まとめ方（巨大20・大5・小1）
 function lumps(u,late){const out=[];while(late&&u>=20){out.push(20);u-=20;}while(u>=5){out.push(5);u-=5;}while(u>=1){out.push(1);u--;}return out;}
 function countSym(u,late){const g=late?Math.floor(u/20):0;u-=g*20;const b=Math.floor(u/5);return{g,b,s:u-b*5};}
-function sendAttack(side){
-  const n=Math.floor(G.stock[side]);if(n<1)return false;
-  G.stock[side]-=n;const to=otherSide(side);
-  G.inc[to].push({u:n,t:SEND_WARN,T:SEND_WARN,wait:false});
-  if(side==='me'){G.st.sent+=n;G.sendFx=0.6;popText(W/2,210,n+'体ぶん送った！','#7dffa8',16);}
-  else note('相手が'+n+'体ぶん送ってきた！');
-  return true;
-}
 function spawnSent(side,u){
   const w=Math.max(1,G.wave),unit=enemyHP(w)*PVP_HP*pvpHpMul();
   const hp=unit*u*SEND_HP,big=u>=20?2:u>=5?1:0;
@@ -528,15 +520,22 @@ function spawnSent(side,u){
 }
 function updateSend(dt){
   for(const side of ['me','op']){
-    // ためた分と送られてくる分は自動で打ち消し合う
+    // 倒した分で、まず自分に来る敵を減らす
     const c=Math.min(Math.floor(G.stock[side]),incTotal(side));
     if(c>0){
       G.stock[side]-=c;let left=c;
       for(const x of G.inc[side]){const k=Math.min(left,x.u);x.u-=k;left-=k;if(!left)break;}
       G.inc[side]=G.inc[side].filter(x=>x.u>0);
-      if(side==='me'&&G.cancelT.me<=0){popText(W/2,300,'打ち消し！ −'+c,'#7fe3ff',16);G.cancelT.me=0.5;}
+      if(side==='me'&&G.cancelT.me<=0){popText(W/2,300,'来る敵を −'+c+' 減らした！','#7fe3ff',15);G.cancelT.me=0.5;}
     }
     if(G.cancelT[side]>0)G.cancelT[side]-=dt;
+    // 残りは自動で相手へ（来るまで2秒以上ある直前の分にまとめて、大きな1体になりやすくする）
+    const n=Math.floor(G.stock[side]);
+    if(n>=1&&!incTotal(side)){
+      G.stock[side]-=n;const to=otherSide(side),last=G.inc[to][G.inc[to].length-1];
+      if(last&&!last.wait&&last.t>2)last.u+=n;else G.inc[to].push({u:n,t:SEND_WARN,T:SEND_WARN,wait:false});
+      if(side==='me'){G.st.sent+=n;G.sentPop=(G.sentPop||0)+n;}
+    }
     // 時間がきたら道に出す（1ウェーブの上限まで。あふれた分は次のウェーブへ）
     for(const x of G.inc[side]){
       x.t-=dt;if(x.t>0)continue;
@@ -547,22 +546,8 @@ function updateSend(dt){
     G.inc[side]=G.inc[side].filter(x=>x.u>0);
     if(G.sendQ[side].length){G.sendT[side]-=dt;if(G.sendT[side]<=0){spawnSent(side,G.sendQ[side].shift());G.sendT[side]=0.7;}}
   }
-  // 相手CPUが送るかどうか考える
-  G.cpuSendT-=dt;if(G.cpuSendT<=0){G.cpuSendT=0.5+Math.random()*0.5;cpuSend('op',G.opp.s||0,G.opp.miss||0);}
-  if(G.autoMe&&G.autoSendS!=null){G.autoSendT=(G.autoSendT||0)-dt;if(G.autoSendT<=0){G.autoSendT=0.75;cpuSend('me',G.autoSendS,0);}}
-}
-// CPUの送り方：ランクが低いほど「自分の道がすいているときに少しずつ」、高いほど「ためらわず大きくためて一気に」
-function cpuSend(side,s,miss){
-  s=Math.min(1,Math.max(0,s));
-  if(Math.random()<miss*0.6)return;            // ぼーっとして送り忘れる
-  const th=Math.round(2+18*s*s);               // これだけたまったら送る（下位2体ぶん〜上位20体ぶん）
-  const gate=0.3+0.8*s;                         // 自分の道がこれより危ないときは送らない（上位は気にしない）
-  const n=Math.floor(G.stock[side]);if(n<1)return;
-  if(danger(side)>gate)return;
-  // 上位ほど「相手のためが少ないすき」を狙う（打ち消されにくい）
-  const opSt=Math.floor(G.stock[otherSide(side)]);
-  const smart=s>0.45&&opSt<=2&&n>=Math.max(3,th*0.4);
-  if(n>=th||smart||(G.sd&&n>=Math.ceil(th/2)))sendAttack(side);
+  // 送った数は1秒ごとにまとめて表示
+  G.sentPopT=(G.sentPopT||0)-dt;if(G.sentPopT<=0){G.sentPopT=1;if(G.sentPop){popText(W/2,210,G.sentPop+'体 送った！','#7dffa8',15);G.sentPop=0;}}
 }
 const summonCost=s=>10+s.summons*10;
 const powerCost=(s,t)=>s.lvl[t]>=5?Infinity:s.lvl[t]*100;
@@ -750,7 +735,6 @@ function update(dt){
     G.waveT-=dt;if(G.waveT<=0){startWave();G.waveT=PVP_WAVE_T;}
     if(G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){const sp=G.spawnQ.shift();spawnEnemy(sp,'me');spawnEnemy(sp,'op');G.spawnT=G.spawnInt;}}
     if(G.bannerT>0)G.bannerT-=dt;
-    if(G.sendFx>0)G.sendFx-=dt;
     if(G.wave>0)updateSend(dt);
   }
   else if(G.breakT>0){G.breakT-=dt;if(G.breakT<=0)startWave();}
@@ -1203,9 +1187,9 @@ function syms(u,x,y,align,k=1){
   }
   return total;
 }
-// 上下の道のあいだのバー：ためた分（タップで送る）／送られてくる分（残り秒数・直前に赤く点滅）
+// 上下の道のあいだのバー：送られてくる敵の予告（数・残り秒数・直前に赤く点滅）
 function drawSendBar(){
-  const x=62,y=231,w=W-70,h=23,inc=incTotal('me'),st=Math.floor(G.stock.me);
+  const x=62,y=231,w=W-70,h=23,inc=incTotal('me');
   if(inc>0){
     const e0=G.inc.me.reduce((a,b)=>b.t<a.t?b:a),near=!e0.wait&&e0.t<=3,blink=near&&Math.sin(G.time*18)>0;
     ctx.fillStyle=blink?'#b3262f':'#4a1d26';rr(x,y,w,h,10);ctx.fill();
@@ -1215,17 +1199,10 @@ function drawSendBar(){
     syms(inc,x+58,y+11,'left',0.9);
     ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';
     ctx.fillText(e0.wait?'次のウェーブ':'あと'+Math.ceil(e0.t)+'秒',x+w-8,y+16);
-  }else if(st>0){
-    const glow=0.6+0.4*Math.sin(G.time*5);
-    ctx.fillStyle=G.sendFx>0?'#7dffa8':'#1f4a36';rr(x,y,w,h,10);ctx.fill();
-    ctx.strokeStyle='rgba(125,255,168,'+glow+')';ctx.lineWidth=2;rr(x,y,w,h,10);ctx.stroke();
-    ctx.textAlign='left';ctx.fillStyle='#7dffa8';ctx.font='bold 12px sans-serif';ctx.fillText('ため',x+8,y+16);
-    syms(st,x+42,y+11,'left',0.9);
-    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.fillText('タップで送る ▶',x+w-8,y+16);
   }else{
-    ctx.fillStyle=G.sendFx>0?'#7dffa8':'#22264a';rr(x,y,w,h,10);ctx.fill();
+    ctx.fillStyle='#22264a';rr(x,y,w,h,10);ctx.fill();
     ctx.textAlign='center';ctx.fillStyle='#a3a7d1';ctx.font='bold 12px sans-serif';
-    ctx.fillText(G.wave<1?'敵を倒すと「ため」がたまる → タップで相手に送る':'敵を倒すと「ため」がたまります',x+w/2,y+16,w-16);
+    ctx.fillText('倒した敵は自動で相手に送られます',x+w/2,y+16,w-16);
   }
 }
 // ランク戦の上半分：相手の名前・ランク・ハート、相手の盤面
@@ -1243,12 +1220,10 @@ function drawPvpTop(){
   ctx.fillText('相手のSP',W-14,80);ctx.fillStyle='#f2f3ff';ctx.font='bold 14px sans-serif';ctx.fillText(Math.floor(G.op.sp),W-14,98);
   ctx.textAlign='left';ctx.fillStyle=G.sd?'#ff6b6b':'#a3a7d1';ctx.font='bold 11px sans-serif';
   ctx.fillText(G.sd?'サドンデス':'時間',14,124);ctx.font='bold 13px sans-serif';ctx.fillText(mmss(G.time),14,140);
-  // 相手のため／あなたが送った分
-  ctx.textAlign='right';ctx.fillStyle='#a3a7d1';ctx.font='bold 10px sans-serif';ctx.fillText('相手のため',W-14,118);
-  ctx.fillStyle='#ff8a3c';ctx.font='bold 13px sans-serif';ctx.fillText(Math.floor(G.stock.op)+'体',W-14,133);
+  // あなたが送った分
   const og=incTotal('op');
-  if(og>0){const x0=G.inc.op.reduce((a,b)=>b.t<a.t?b:a);ctx.fillStyle='#7dffa8';ctx.font='bold 10px sans-serif';
-    ctx.fillText('送った'+og+'体',W-14,147);ctx.font='9px sans-serif';ctx.fillText(x0.wait?'次のウェーブ':'あと'+Math.ceil(x0.t)+'秒',W-14,158);}
+  if(og>0){const x0=G.inc.op.reduce((a,b)=>b.t<a.t?b:a);ctx.textAlign='right';ctx.fillStyle='#7dffa8';ctx.font='bold 11px sans-serif';
+    ctx.fillText('送った '+og+'体',W-14,124);ctx.font='10px sans-serif';ctx.fillText(x0.wait?'次のウェーブ':'あと'+Math.ceil(x0.t)+'秒',W-14,139);}
   drawBoard('op');
 }
 function holdInfo(){
@@ -1323,7 +1298,6 @@ cv.addEventListener('pointerdown',ev=>{
   const[x,y]=toLogical(ev);
   if(x>W-72&&y<48){pause();return;}
   if(y>=690&&y<=748&&x>=BX&&x<=W-BX){summon('me');return;}
-  if(G.pvp&&y>=226&&y<=260&&x>=58){if(!sendAttack('me'))note('まだたまっていません（敵を倒すとたまる）');return;}
   if(y>=622&&y<=680){const k=Math.floor((x-10)/69);if(k>=0&&k<5&&x-10-k*69<=64){G.hold={kind:'power',type:G.me.deck[k],x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);}return;}
   const i=cellAt('me',x,y);
   if(i>=0&&G.me.dice[i]){G.drag={from:i,x,y,sx:x,sy:y};G.hold={kind:'die',side:'me',i,x,y,t0:G.time,moved:false};cv.setPointerCapture(ev.pointerId);return;}
