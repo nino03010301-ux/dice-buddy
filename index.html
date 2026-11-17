@@ -203,6 +203,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     ・1ウェーブで道に出てくる量には上限があり、あふれた分は次のウェーブに来ます。たくさん来ると大きな1体にまとまります（★の巨大な敵はウェーブ11から）<br>
     ・時間がたつほど敵が強くなり、7分を過ぎると「サドンデス」で一気に強くなります<br>
     ・勝つと約+20RP。負けるとランクが高いほど多く減ります（ウッドは減りません）<br>
+    ・<b>3連勝すると格上の相手と当たりやすくなります</b>。連勝が伸びるほど、さらに上の相手が来ます。格上に勝つと差に応じてRPが最大2.5倍、負けても減りが軽くなります（途中でやめた場合は軽くなりません）<br>
     ・<b>マッチした後に閉じたり、試合の途中でやめると負け</b>になります<br>
     ・ダイスマスターは 2000RP 以上で、しかも上位30人だけ<br>
     ・毎月1日にシーズンが区切られ、攻め・守り・勝率・試合数の成績で 0〜3段階ランクが下がります。最高ランクに応じてご褒美あり
@@ -225,6 +226,7 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
     <div class="mid">VS</div>
     <div class="side"><div class="badge s" id="vOpB">W</div><b id="vOpN">相手</b><span id="vOpT"></span></div>
   </div>
+  <div class="card" id="vUp" style="display:none;border:2px solid var(--accent);text-align:center;line-height:1.6"></div>
   <div class="card"><span style="font-size:13px;color:var(--muted)">相手のデッキ</span><div class="minideck" id="vOpDeck"></div><span id="vOpLv" style="font-size:12px;color:var(--muted);text-align:center"></span></div>
   <div class="card">
     <div class="row" style="justify-content:space-between"><span id="vDeckInfo" style="font-size:14px"></span>
@@ -363,7 +365,16 @@ window.RANK=(()=>{
     deck.forEach(t=>cls[t]=clamp(Math.round(base+(r()-0.5)*1.4),1,5));
     return{deck,cls,react:1.5-0.95*Math.min(1,s),miss:0.5*(1-Math.min(1,s)),s};
   }
-  return{N,TOP,MASTER_MIN,TIERS,LO,LOSS,WIN_GOLD,FIRST,SEASON_GOLD,CPU,clamp,baseTier,position,tierOf,cpuPos,label,grades,G5,cpuSetup,rng};
+  // 連勝中は格上と当たりやすい（3連勝から。連勝が伸びるほど上の相手）
+  const UP_FROM=3;
+  const upChance=k=>k<UP_FROM?0:Math.min(0.9,0.6+0.1*(k-UP_FROM));
+  const upGap=k=>Math.min(600,120+100*(k-UP_FROM));          // 3連勝 +120RP、5連勝 +320RP（約1ランク上）
+  // 勝ったとき：相手が上なら差に応じて倍率アップ。負けたとき：相手が上なら減りが軽い
+  const winMul=g=>g<=0?1:Math.round((1+Math.min(1.5,g/350))*10)/10;
+  const winDp=(g,left)=>g<=0?20+clamp(Math.round(g/50),-5,0)+left:Math.round((20+left)*winMul(g));
+  const loseMul=g=>g<=0?1:Math.max(0.4,1-g/500);
+  const loseDp=(t,g)=>-Math.round(LOSS[t]*loseMul(g));
+  return{UP_FROM,upChance,upGap,winMul,winDp,loseMul,loseDp,N,TOP,MASTER_MIN,TIERS,LO,LOSS,WIN_GOLD,FIRST,SEASON_GOLD,CPU,clamp,baseTier,position,tierOf,cpuPos,label,grades,G5,cpuSetup,rng};
 })();
 (()=>{
 'use strict';
@@ -936,7 +947,7 @@ function settleMatch(id,w){
 // ====== ランク戦の終了 ======
 function rankOver(r,surrender){
   G.over=true;G.running=false;G.drag=null;G.hold=null;
-  const st={kn:G.st.kn,kp:Math.round(G.st.kp*1000)/1000,lk:G.st.lk,sec:Math.round(G.time),left:Math.max(0,G.lives)};
+  const st={kn:G.st.kn,kp:Math.round(G.st.kp*1000)/1000,lk:G.st.lk,sec:Math.round(G.time),left:Math.max(0,G.lives),sur:!!surrender};
   const t=document.getElementById('kTitle');
   t.textContent=r==='win'?'勝利！':r==='draw'?'引き分け':surrender?'降参…負け':'敗北…';
   t.style.color=r==='win'?'var(--accent)':r==='draw'?'':'var(--bad)';
@@ -965,7 +976,11 @@ function showRankResult(x){
   const up=x.tA>x.tB,down=x.tA<x.tB;
   document.getElementById('kTier').textContent=(up?'昇格！ ':down?'降格… ':'')+RANK.label(x.pts,x.tA,x.posA)+'（'+x.pts+' RP）';
   document.getElementById('kTier').style.color=up?'var(--accent)':'';
-  document.getElementById('kPos').textContent='順位 '+x.posB+'位 → '+x.posA+'位';
+  let ps='順位 '+x.posB+'位 → '+x.posA+'位';
+  if(x.outcome==='win'&&x.gap>=60)ps='⚡ 格上撃破！ RP ×'+RANK.winMul(x.gap)+'\n'+ps;
+  else if(x.outcome==='lose'&&x.gap>=60&&!x.abandoned)ps='格上が相手だったので、減りを軽くしました\n'+ps;
+  if(x.outcome==='win'&&x.streak>=2)ps+='\n🔥 '+x.streak+'連勝中'+(x.streak>=RANK.UP_FROM?'（格上と当たりやすくなっています）':'（あと'+(RANK.UP_FROM-x.streak)+'勝で格上と当たりやすくなります）');
+  document.getElementById('kPos').textContent=ps;document.getElementById('kPos').style.whiteSpace='pre-wrap';
   let t=x.gold?'+'+x.gold+'G を受け取りました':'';
   if(x.bonus)t+=(t?'\n':'')+'初めて'+RANK.TIERS[x.tA].n+'に上がった特典 +'+x.bonus+'G！';
   msg('kMsg',(t||'保存しました')+'（所持 '+profile.gold+'G）','ok');
@@ -1499,7 +1514,9 @@ function renderRank(){
   document.getElementById('rBar').style.width=Math.max(0,Math.min(100,w))+'%';
   document.getElementById('rNext').textContent=next;
   document.getElementById('rPos').textContent=RANK.N+'人中 '+k.pos+'位';
-  document.getElementById('rPosSub').textContent='遊ばない間も、ほかのプレイヤーは遊んでいます';
+  const sk=r.streak||0;
+  document.getElementById('rPosSub').textContent=(sk>=RANK.UP_FROM?'🔥'+sk+'連勝中！格上と当たりやすくなっています\n':sk>=1?'🔥'+sk+'連勝中（'+RANK.UP_FROM+'連勝から格上と当たりやすくなります）\n':'')+'遊ばない間も、ほかのプレイヤーは遊んでいます';
+  document.getElementById('rPosSub').style.whiteSpace='pre-wrap';
   document.getElementById('rName').value=r.name||'あなた';
   const mo=Number(r.season.split('-')[1]);
   document.getElementById('rSeason').textContent=mo+'月シーズン';
@@ -1546,7 +1563,8 @@ let matchTimer=null,matchTick=null,pendingOpp=null,vsTimer=null;
 function startMatching(){
   if(!profile)return;
   const name=(document.getElementById('rName').value||'').trim()||'あなた';
-  document.getElementById('mTitle').textContent='対戦相手を探しています…';
+  const sk=(profile.rank&&profile.rank.streak)||0;
+  document.getElementById('mTitle').textContent=sk>=RANK.UP_FROM?'🔥'+sk+'連勝中！格上の相手を探しています…':'対戦相手を探しています…';
   document.getElementById('mSpin').textContent='🎲';document.getElementById('mSpin').style.animationPlayState='running';
   msg('mMsg','');const bc=document.getElementById('bMatchCancel');bc.style.display='';bc.textContent='キャンセル';
   bc.onclick=()=>{clearTimeout(matchTimer);clearInterval(matchTick);show('ovMatch',false);};
@@ -1580,6 +1598,15 @@ function openVs(){
   document.getElementById('vMyT').textContent=RANK.label(k.pts,k.tier,k.pos);
   badge(document.getElementById('vOpB'),o.tier);document.getElementById('vOpN').textContent=o.name;
   document.getElementById('vOpT').textContent=RANK.label(o.pts,o.tier,o.pos);
+  // 格上の相手なら、勝ったとき・負けたときのRPを先に見せる
+  const gap=Math.round(o.pts-k.pts),vu=document.getElementById('vUp');
+  if(gap>=60){
+    const sk=k.r.streak||0;
+    vu.innerHTML=(sk>=RANK.UP_FROM?'<div>🔥'+sk+'連勝中</div>':'')+'<div><b style="color:var(--accent)">⚡ 格上の相手！（'+gap+' RP 上）</b></div>'+
+      '<div>勝てば RP ×'+RANK.winMul(gap)+'（約 +'+RANK.winDp(gap,0)+'〜'+RANK.winDp(gap,2)+'）</div>'+
+      '<div style="font-size:13px;color:var(--muted)">負けても '+RANK.loseDp(k.tier,gap)+' RP で済みます（いつもは −'+RANK.LOSS[k.tier]+'）</div>';
+    vu.style.display='';
+  }else vu.style.display='none';
   // 相手のデッキは対戦が始まるまでのお楽しみ（盤面に出てきて初めて分かる）
   document.getElementById('vOpDeck').innerHTML=o.deck.map(()=>'<span style="background:var(--panel2);color:var(--muted);font-weight:800">？</span>').join('');
   document.getElementById('vOpLv').textContent='対戦が始まると、相手の盤面に出てきたサイコロで分かります';
@@ -1778,12 +1805,16 @@ function applyRank(n, outcome, st) {
   const o = m.o, op = r.cpu[o], opT = cpuInfo(r, o).tier;
   let dp = 0;
   if (outcome === "win") {
-    dp = 20 + R.clamp(Math.round((op - r.pts) / 50), -5, 8) + Math.min(2, (st && st.left) || 0);
+    dp = R.winDp(Math.round(op - r.pts), Math.min(2, (st && st.left) || 0));
     r.cpu[o] = Math.max(0, r1(op - R.LOSS[opT]));
+    r.streak = (r.streak || 0) + 1; r.bestStreak = Math.max(r.bestStreak || 0, r.streak);
   } else if (outcome === "lose") {
-    dp = -R.LOSS[tB];
+    // 格上に負けたときは減りが軽い（途中で閉じた・やめたときは軽くならない）
+    dp = st && !st.sur ? R.loseDp(tB, Math.round(op - r.pts)) : -R.LOSS[tB];
     r.cpu[o] = r1(op + 20);
+    r.streak = 0;
   }
+  const gap = Math.round(op - r.pts);
   r.pts = Math.max(0, r.pts + dp);
   r.st.g++;
   if (outcome === "win") r.st.w++; else if (outcome === "lose") r.st.l++; else r.st.d++;
@@ -1794,7 +1825,7 @@ function applyRank(n, outcome, st) {
   let bonus = 0; for (let t = (r.maxTier || 0) + 1; t <= tA; t++) bonus += R.FIRST[t];
   r.maxTier = Math.max(r.maxTier || 0, tA); r.sMax = Math.max(r.sMax || 0, tA);
   n.gold += gold + bonus; r.match = null;
-  return { outcome, dp, pts: r.pts, posB, posA, tB, tA, gold, bonus, opName: R.CPU[o].name, abandoned: !st };
+  return { outcome, dp, pts: r.pts, posB, posA, tB, tA, gold, bonus, opName: R.CPU[o].name, abandoned: !st || !!st.sur, gap, up: !!m.up, streak: r.streak || 0 };
 }
 // シーズンの区切り：成績で0〜3段階下げ、最高ランクのご褒美、CPUもやり直し
 function closeSeason(n, now) {
@@ -1827,11 +1858,19 @@ window.Cloud = {
       const now = Date.now();
       const tk = rankTick(n, now, true);
       const r = n.rank; r.name = String(name || "あなた").slice(0, 12);
-      const near = r.cpu.map((p, i) => ({ i, d: Math.abs(p - r.pts) })).sort((a, b) => a.d - b.d).slice(0, 10);
+      const k = r.streak || 0;
+      let near = null, up = false;
+      // 連勝中は格上と当たりやすい：自分より上の人の中から、連勝数に応じた高さに近い人を選ぶ
+      if (Math.random() < R.upChance(k)) {
+        const target = r.pts + R.upGap(k);
+        const above = r.cpu.map((p, i) => ({ i, p, d: Math.abs(p - target) })).filter(x => x.p >= r.pts + 60).sort((a, b) => a.d - b.d).slice(0, 8);
+        if (above.length) { near = above; up = true; }
+      }
+      if (!near) near = r.cpu.map((p, i) => ({ i, d: Math.abs(p - r.pts) })).sort((a, b) => a.d - b.d).slice(0, 10);
       const o = near[Math.floor(Math.pow(Math.random(), 1.6) * near.length)].i;
       const id = now.toString(36) + Math.random().toString(36).slice(2, 6);
-      r.match = { id, o, t0: now };
-      return { id, opp: cpuInfo(r, o), left: tk.left };
+      r.match = { id, o, t0: now, up };
+      return { id, opp: cpuInfo(r, o), left: tk.left, streak: k, up };
     });
   },
   rankFinish(id, outcome, st) {
