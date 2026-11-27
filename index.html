@@ -167,6 +167,9 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
   <div class="card">
     <label style="font-size:14px">相棒の名前</label>
     <input type="text" id="botName" maxlength="10" value="ダイスケ">
+    <label style="font-size:14px;margin-top:10px;display:block">相棒のセリフ（吹き出し）</label>
+    <div class="tabs" style="margin-top:4px"><button id="talkOn" class="on">オン</button><button id="talkOff">オフ</button></div>
+    <div id="talkMsg" class="msg"></div>
   </div>
   <div class="tabs"><button id="tMe" class="on">自分のデッキ</button><button id="tBot">相棒のデッキ</button></div>
   <div class="card">
@@ -272,6 +275,9 @@ input[type=text]{width:100%;padding:12px;border-radius:10px;border:2px solid var
 <!-- 一時停止 -->
 <div class="overlay" id="ovPause"><div class="modal">
   <h3>一時停止中</h3>
+  <div id="pTalkBox"><div style="font-size:14px;margin-bottom:4px">相棒のセリフ</div>
+    <div class="tabs"><button id="pTalkOn" class="on">オン</button><button id="pTalkOff">オフ</button></div>
+    <div id="pTalkMsg" class="msg"></div></div>
   <button class="btn" id="bResume">再開</button>
   <button class="btn sec" id="bQuit">試合をやめる</button>
 </div></div>
@@ -350,12 +356,12 @@ window.RANK=(()=>{
     return{atk,def,win,games,total,drop};
   }
   // 相手CPUの強さ（ランクポイントが高いほど、レベルも判断も上）
-  const AUTO=['fire','elec','wind','iron','snipe','meteor','poison','joker'];
-  const ALLD=['fire','elec','wind','poison','ice','iron','snipe','light','crit','grow','joker','meteor'];
-  const RW={fire:1,elec:1,wind:1,poison:1,ice:1,iron:1.2,snipe:1.2,light:1.1,crit:1.3,grow:1,joker:1.5,meteor:1.5};
+  const AUTO=['fire','elec','wind','iron','snipe','meteor','poison','joker','laser','mine'];
+  const ALLD=['fire','elec','wind','poison','ice','iron','snipe','light','crit','grow','joker','meteor','mine','laser','sp','hole'];
+  const RW={fire:1,elec:1,wind:1,poison:1,ice:1,iron:1.2,snipe:1.2,light:1.1,crit:1.3,grow:1,joker:1.5,meteor:1.5,mine:1,laser:1.2,sp:0.9,hole:1.3};
   function cpuSetup(i,p){
     const s=clamp(p/2300,0,1.15),r=rng(i*101+7);
-    const pool=ALLD.filter(t=>s>0.25||['fire','elec','wind','poison','ice','iron','snipe','light'].includes(t));
+    const pool=ALLD.filter(t=>s>0.25||['fire','elec','wind','poison','ice','iron','snipe','light','mine','laser','sp'].includes(t));
     const deck=[];const add=t=>{if(!deck.includes(t)&&deck.length<5)deck.push(t);};
     if(r()<0.6)add('ice');
     let guard=0;
@@ -410,10 +416,15 @@ const DICE={
  grow:{n:'成長',c:'#3fae6a',r:'エピック',dmg:15,int:1.0,d:'置いて15秒たつと目が1つ増える'},
  joker:{n:'ジョーカー',c:'#ff6fb5',r:'伝説',dmg:15,int:1.0,d:'同じ目のどのサイコロにも重ねられ、その種類に変身する'},
  meteor:{n:'メテオ',c:'#ff9a2e',r:'伝説',dmg:10,int:1.0,d:'6秒ごとにメテオを落として周りにも大ダメージ'},
+ // 2026-11-27 追加の4種類
+ mine:{n:'地雷',c:'#a0703f',r:'ノーマル',dmg:40,int:2.0,d:'敵の行く先の道に地雷を置く。踏んだ敵と周りに大ダメージ'},
+ laser:{n:'レーザー',c:'#e0245e',r:'レア',dmg:4,int:0.25,d:'同じ敵を撃ち続けるほど威力が上がる（最大3倍）。ボスや硬い敵に強い'},
+ sp:{n:'SP',c:'#d9b13b',r:'レア',dmg:0,int:4,d:'攻撃しない。4秒ごとにSPがもらえる（目が多いほどたくさん）'},
+ hole:{n:'ブラックホール',c:'#5b3cc4',r:'エピック',dmg:8,int:1.0,d:'5秒ごとに一番先の敵を道の少し後ろへ引き戻す（ボスは半分）'},
 };
 const ALL=Object.keys(DICE);
 // 種類ごとの絵（色だけで見分けにくいので）
-const EMO={fire:'🔥',elec:'⚡',wind:'🌪️',poison:'☠️',ice:'❄️',iron:'🔨',snipe:'🎯',light:'✨',crit:'💥',grow:'🌱',joker:'🃏',meteor:'☄️'};
+const EMO={fire:'🔥',elec:'⚡',wind:'🌪️',poison:'☠️',ice:'❄️',iron:'🔨',snipe:'🎯',light:'✨',crit:'💥',grow:'🌱',joker:'🃏',meteor:'☄️',mine:'💣',laser:'🔦',sp:'💰',hole:'🌀'};
 const ICON={};
 function icon(t,px){
   const k=t+'_'+px;if(ICON[k])return ICON[k];
@@ -427,7 +438,7 @@ function drawIcon(t,cx,cy,px,alpha=1){
   const o=icon(t,Math.round(px));const a=ctx.globalAlpha;ctx.globalAlpha=a*alpha;
   ctx.drawImage(o.c,cx-o.s/2,cy-o.s/2,o.s,o.s);ctx.globalAlpha=a;
 }
-const DMG_TYPES=['fire','iron','snipe','wind','elec','meteor'];
+const DMG_TYPES=['fire','iron','snipe','wind','elec','meteor','laser','mine'];
 
 // ====== 相棒のセリフ ======
 const LINES={
@@ -455,6 +466,7 @@ const fmt=(s,o)=>s.replace(/\{(\w)\}/g,(_,k)=>o[k]??'');
 const session={plays:0,best:0};
 const decks={me:['fire','elec','wind','poison','ice'],bot:null};
 let botName='ダイスケ';
+let talkOn=true; // 相棒のセリフ（吹き出し）を出すか。保存データの talk（false のときだけオフ）
 
 // ====== キャンバス ======
 const cv=document.getElementById('cv');const ctx=cv.getContext('2d');
@@ -493,7 +505,7 @@ function newGame(stage){
   G={stage:stage||1,me:newSide(decks.me),bot:newSide(decks.bot),enemies:[],bullets:[],fx:[],
     wave:0,lives:3,spawnQ:[],spawnT:0,breakT:1.5,running:true,paused:false,over:false,
     time:0,botT:1.2,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,meteorT:{},
-    parts:[],texts:[],meteors:[],shake:0,flash:0};
+    parts:[],texts:[],meteors:[],mines:[],shake:0,flash:0};
   session.plays++;
   if(session.plays>1) say(fmt(pick(LINES.again),{n:session.plays,b:session.best}),3);
   else say(pick(LINES.start),3);
@@ -504,7 +516,7 @@ function newRanked(o){
   G={pvp:true,stage:1,me:newSide(decks.me),op:newSide(o.deck,o.cls),opp:o,enemies:[],bullets:[],fx:[],
     wave:0,lives:3,opLives:3,spawnQ:[],spawnT:0,waveT:3.5,running:true,paused:false,over:false,
     time:0,botT:1.2,opT:1.5,bubble:null,bubbleT:0,lastBubble:-99,said:{},drag:null,
-    parts:[],texts:[],meteors:[],shake:0,flash:0,banner:'3秒後にスタート',bannerT:3.2,sd:false,
+    parts:[],texts:[],meteors:[],mines:[],shake:0,flash:0,banner:'3秒後にスタート',bannerT:3.2,sd:false,
     st:{kn:0,kp:0,lk:0,sent:0},
     // 送り合い：stock＝倒した分（まず自分に来る敵を減らし、残りはすぐ相手へ）、inc＝送られてくる予定（u体ぶん・t秒後）、budget＝このウェーブでまだ出せる量
     stock:{me:0,op:0},inc:{me:[],op:[]},budget:{me:0,op:0},sendQ:{me:[],op:[]},sendT:{me:0,op:0},
@@ -580,7 +592,7 @@ function popText(x,y,text,c,size=13){
 }
 function note(text){if(!G)return;G.bubble=text;G.bubbleT=2.6;G.lastBubble=G.time;}
 function say(text,prio=1){
-  if(!G||G.pvp)return; // ランク戦では相棒のセリフは出さない
+  if(!G||G.pvp||!talkOn)return; // ランク戦・セリフオフのときは相棒のセリフは出さない
   if(prio<2 && G.time-G.lastBubble<4)return;
   G.bubble=text;G.bubbleT=3.2;G.lastBubble=G.time;
 }
@@ -788,7 +800,13 @@ function update(dt){
       if(d.type==='grow'&&d.pip<7){d.growT+=dt;if(d.growT>=15){s.dice[i]=newDie(pick(s.deck),d.pip+1);
         const[gx,gy]=cellCenter(side,i);burst(gx,gy,'#7dffa8',10,{spd:70,life:0.6,size:3,g:-40,kind:'star'});popText(gx,gy-20,'成長！','#7dffa8',12);return;}}
       if(d.type==='meteor'){d.mt=(d.mt??3)-dt;if(d.mt<=0){const t=chooseTarget('x',side);if(t){d.mt=6;meteor(side,t,60*d.pip*lv(s,'meteor'));}else d.mt=0.5;}}
+      if(d.type==='hole'){d.ht=(d.ht??2.5)-dt;if(d.ht<=0){const t=front(side);if(t){d.ht=5;pullBack(side,i,t,(40+15*d.pip)*lv(s,'hole'));}else d.ht=0.5;}}
       const sup=supportOf(side,i);
+      if(d.type==='sp'){ // 攻撃しない。時間でSPがもらえる（光の隣だと早くなる）
+        d.cd-=dt*(1+sup.spd);if(d.cd>0)return;d.cd=DICE.sp.int;
+        const g=Math.round(15*d.pip*lv(s,'sp'));s.sp+=g;d.pulse=0.15;
+        if(side!=='op'){const[gx,gy]=cellCenter(side,i);popText(gx,gy-18,'+'+g+' SP','#ffe27a',12);}
+        return;}
       d.cd-=dt*(1+sup.spd);
       if(d.cd>0)return;
       const t=chooseTarget(d.type,side);if(!t){d.cd=0.1;return;}
@@ -796,6 +814,13 @@ function update(dt){
       let dmg=def.dmg*d.pip*lv(s,d.type);
       const crit=Math.random()<0.05+sup.crit;if(crit)dmg*=2.5;
       const[cx,cy]=cellCenter(side,i);d.pulse=0.12;
+      if(d.type==='laser'){ // すぐ当たる光線。同じ敵に当て続けるほど強くなる
+        if(d.lt===t)d.lk=Math.min(20,(d.lk||0)+1);else{d.lt=t;d.lk=0;}
+        dmg*=1+0.1*d.lk;d.pulse=0.05;
+        G.fx.push({k:'beam',x:cx,y:cy,x2:t.x,y2:t.y,t:0.12,w:1.5+d.lk*0.15,c:def.c});
+        damage(t,dmg);if(crit)popText(t.x,t.y-16,'会心！'+short(dmg),'#ffcc4d',14);
+        return;}
+      if(d.type==='mine'){placeMine(side,t,dmg);return;}
       G.bullets.push({x:cx,y:cy,dx:0,dy:-1,target:t,dmg,type:d.type,pip:d.pip,side,c:def.c,crit});
     });
   }
@@ -824,6 +849,18 @@ function update(dt){
     }
   }
   G.meteors=G.meteors.filter(m=>!m.done);
+  // 地雷：敵が上を通ったら爆発
+  for(const m of G.mines){
+    m.t-=dt;if(m.t<=0){m.done=true;continue;}
+    const e=G.enemies.find(e=>e.hp>0&&(!G.pvp||e.side===m.side)&&e.dist>=m.dist-4&&e.dist<=m.dist+14);
+    if(!e)continue;
+    for(const o of G.enemies)if(o.hp>0&&sameSide(o,e)&&Math.hypot(o.x-m.x,o.y-m.y)<30)damage(o,o===e?m.dmg:m.dmg*0.5);
+    G.fx.push({k:'ring',x:m.x,y:m.y,t:0.35,c:'#ffb04a',r:34});
+    burst(m.x,m.y,'#ffb04a',10,{spd:120,life:0.4,size:3});burst(m.x,m.y,'#5a3a1f',6,{spd:80,life:0.4,size:2.5});
+    if(m.side!=='op')popText(m.x,m.y-18,short(m.dmg),'#ffb04a',13);
+    m.done=true;
+  }
+  G.mines=G.mines.filter(m=>!m.done);
   if(G.bubbleT>0)G.bubbleT-=dt;
   // 相棒の行動
   if(G.pvp){
@@ -844,6 +881,26 @@ function cpuAct(){
   botAct('op');
 }
 function meteor(side,t,dmg){G.meteors.push({target:t,x:t.x,y:t.y,dmg,t:0.45,T:0.45});}
+// 地雷：狙った敵の少し先の道に置く（1人あたり最大10個・20秒で消える）
+function placeMine(side,t,dmg){
+  const own=G.mines.filter(m=>m.side===(G.pvp?side:'co'));
+  if(own.length>=10)own[0].done=true;
+  const dist=Math.min(PATH_LEN-12,t.dist+35+Math.random()*110);
+  const pos=G.pvp&&side==='op'?posOp(dist):posAt(dist);
+  G.mines.push({side:G.pvp?side:'co',dist,x:pos[0],y:pos[1],dmg,t:20});
+  G.mines=G.mines.filter(m=>!m.done);
+}
+// ブラックホール：一番先の敵を道の後ろへ引き戻す
+function pullBack(side,i,e,amt){
+  if(e.type==='boss')amt*=0.5;
+  e.dist=Math.max(0,e.dist-amt);const[nx,ny]=enemyPos(e);
+  const[cx,cy]=cellCenter(side,i);
+  G.fx.push({k:'zap',x:cx,y:cy,x2:e.x,y2:e.y,t:0.3,c:'#9b7bff'});
+  G.fx.push({k:'ring',x:e.x,y:e.y,t:0.4,c:'#9b7bff',r:30});
+  burst(e.x,e.y,'#9b7bff',8,{spd:70,life:0.4,size:2.5,kind:'star'});
+  e.x=nx;e.y=ny;G.fx.push({k:'ring',x:nx,y:ny,t:0.4,c:'#5b3cc4',r:26});
+  if(side!=='op')popText(nx,ny-18,'引き戻し！','#b9a3ff',12);
+}
 function bossSkill(e){
   const all=[];for(const side of (G.pvp?[e.side]:['me','bot']))G[side].dice.forEach((d,i)=>{if(d)all.push({d,side,i});});
   for(let k=0;k<3&&all.length;k++){const o=all.splice(Math.floor(Math.random()*all.length),1)[0];o.d.stun=3;
@@ -891,6 +948,7 @@ function bestMerge(s,{protectIce,full}){
     if(a.type==='joker'){ sc=DMG_TYPES.includes(b.type)?12:-5; }
     if(a.type==='light'||a.type==='crit')sc-=6;
     if(a.type==='grow')sc-=8;
+    if(a.type==='sp')sc-=4;
     if(a.type==='ice'&&protectIce)sc-=10;
     if(a.stun>0||b.stun>0)sc-=3;
     // 合体先はサポート役が隣にいる場所を優先
@@ -921,7 +979,7 @@ function gameOver(clear){
   document.getElementById('oTitle').style.color=clear?'var(--accent)':'';
   document.getElementById('oWave').textContent=w+' / '+STAGE_WAVES;
   document.getElementById('oBest').textContent=clear?'':'あと '+(STAGE_WAVES-w)+' ウェーブでクリア！';
-  document.getElementById('oLine').textContent=botName+'「'+pick(clear?LINES.clear:LINES.over)+'」';
+  document.getElementById('oLine').textContent=talkOn?botName+'「'+pick(clear?LINES.clear:LINES.over)+'」':'';
   document.getElementById('bNextSt').style.display=clear?'':'none';
   document.getElementById('bAgain').className=clear?'btn sec':'btn';
   stageSel=G.stage;
@@ -998,7 +1056,7 @@ function drawDie(d,x,y,size,alpha=1){
   ctx.fillStyle=def.c;rr(ox,oy,s,s,11);ctx.fill();
   ctx.fillStyle='rgba(0,0,0,.18)';rr(ox,oy+s*0.78,s,s*0.22,8);ctx.fill();
   drawIcon(d.type,ox+s/2,oy+s/2,s*0.6,0.55);
-  const dot=d.type==='light'||d.type==='elec'?'#3a2a00':'#fff';
+  const dot=d.type==='light'||d.type==='elec'||d.type==='sp'?'#3a2a00':'#fff';
   ctx.fillStyle=dot;ctx.strokeStyle=dot==='#fff'?'rgba(0,0,0,.55)':'rgba(255,255,255,.6)';ctx.lineWidth=1.5;const sp=s*0.26,r=s*0.075;
   for(const[a,b]of PIPS[d.pip]){ctx.beginPath();ctx.arc(ox+s/2+a*sp,oy+s/2+b*sp,r,0,Math.PI*2);ctx.fill();ctx.stroke();}
   if(d.type==='grow'&&d.pip<7){ctx.fillStyle='rgba(255,255,255,.85)';ctx.fillRect(ox+6,oy+s-6,(s-12)*(d.growT/15),3);}
@@ -1063,6 +1121,15 @@ function draw(){
   ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
   ctx.strokeStyle='#3a3f73';ctx.lineWidth=2;ctx.setLineDash([6,8]);ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#ff6b6b';ctx.font='bold 11px sans-serif';ctx.textAlign='right';ctx.fillText('出口▶',W-4,375);
+  // 地雷（道の上。赤い点が点滅）
+  for(const m of G.mines){
+    const sm=m.side==='op'?0.6:1,r=6*sm;
+    ctx.globalAlpha=m.t<3?0.4+0.6*Math.abs(Math.sin(G.time*8)):1;
+    ctx.fillStyle='#3a2a1c';ctx.beginPath();ctx.arc(m.x,m.y,r+1.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#a0703f';ctx.beginPath();ctx.arc(m.x,m.y,r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=Math.sin(G.time*6+m.dist)>0?'#ff4d4d':'#7a1f1f';ctx.beginPath();ctx.arc(m.x,m.y,2.2*sm,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
   // 敵
   for(const e0 of G.enemies){
     const small=e0.side==='op';const e=small?{...e0,size:e0.size*0.6}:e0;
@@ -1119,6 +1186,9 @@ function draw(){
   for(const f of G.fx){
     if(f.k==='ring'){ctx.strokeStyle=f.c;ctx.globalAlpha=Math.min(1,f.t*3);ctx.lineWidth=3;ctx.beginPath();ctx.arc(f.x,f.y,(f.r||30)*(1-f.t),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}
     if(f.k==='zap')zigzag(f.x,f.y,f.x2,f.y2,f.c||'#fff27a');
+    if(f.k==='beam'){ctx.globalAlpha=Math.min(1,f.t*10);ctx.lineCap='round';
+      ctx.strokeStyle=f.c;ctx.lineWidth=f.w+3;ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x2,f.y2);ctx.stroke();
+      ctx.strokeStyle='#ffd6e3';ctx.lineWidth=f.w;ctx.stroke();ctx.lineCap='butt';ctx.globalAlpha=1;}
   }
   drawBoard('me');
   // 自分のSP
@@ -1339,12 +1409,34 @@ cv.addEventListener('pointercancel',()=>{if(G){G.drag=null;G.hold=null;}});
 
 // ====== 一時停止 ======
 function pause(){if(!G||G.over)return;G.paused=true;G.drag=null;G.hold=null;
+  document.getElementById('pTalkBox').style.display=G.pvp?'none':'';msg('pTalkMsg','');renderTalk();
   document.getElementById('bQuit').textContent=G.pvp?'降参する（負けになります）':'試合をやめる';
   show('ovPause',true);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 window.addEventListener('pagehide',pause);
 document.getElementById('bResume').onclick=()=>{G.paused=false;show('ovPause',false);last=performance.now();};
 document.getElementById('bQuit').onclick=()=>{show('ovPause',false);G.paused=false;if(G.pvp)rankOver('lose',true);else gameOver();};
+
+// ====== 相棒のセリフ オン・オフ（押したらすぐ保存。読み直して一致したら「保存しました」） ======
+function renderTalk(){
+  for(const[a,b]of[['talkOn','talkOff'],['pTalkOn','pTalkOff']]){
+    document.getElementById(a).classList.toggle('on',talkOn);document.getElementById(b).classList.toggle('on',!talkOn);}
+}
+function setTalk(v,msgId){
+  if(v===talkOn)return;
+  const prev=talkOn;talkOn=v;renderTalk();
+  if(!v&&G&&!G.pvp)G.bubbleT=0; // 今出ている吹き出しも消す
+  msg(msgId,'保存中…','info');
+  Promise.resolve().then(()=>Cloud().setTalk(v)).then(({profile:p})=>{
+    setProfile(p);
+    if((p.talk!==false)!==v)throw new Error('保存後に読み直した内容が一致しませんでした');
+    msg(msgId,'保存しました（セリフ '+(v?'オン':'オフ')+'）','ok');
+  }).catch(e=>{talkOn=prev;renderTalk();msg(msgId,'セリフの切り替えを保存できませんでした（元に戻しました）\n'+errText(e),'ng');});
+}
+document.getElementById('talkOn').onclick=()=>setTalk(true,'talkMsg');
+document.getElementById('talkOff').onclick=()=>setTalk(false,'talkMsg');
+document.getElementById('pTalkOn').onclick=()=>setTalk(true,'pTalkMsg');
+document.getElementById('pTalkOff').onclick=()=>setTalk(false,'pTalkMsg');
 
 // ====== 画面切り替え ======
 function show(id,on){document.getElementById(id).classList.toggle(id.startsWith('ov')?'show':'show',on);}
@@ -1370,7 +1462,7 @@ let tab='me';
 document.getElementById('tMe').onclick=()=>{tab='me';renderDeck();};
 document.getElementById('tBot').onclick=()=>{tab='bot';renderDeck();};
 // おまかせ：毎回少しずつ違う組み合わせを、持っているサイコロから選ぶ
-const AUTO_DMG=['fire','elec','wind','iron','snipe','meteor','poison','joker'];
+const AUTO_DMG=['fire','elec','wind','iron','snipe','meteor','poison','joker','laser','mine'];
 const AUTO_RW={'ノーマル':1,'レア':1.3,'エピック':1.5,'伝説':1.8};
 function autoWeight(t,avoid){let w=(1+0.4*(dieLv(t)-1))*(AUTO_RW[DICE[t].r]||1);if(avoid&&avoid.has(t))w*=0.25;return w;}
 function pickWeighted(pool,avoid){let sum=0;for(const t of pool)sum+=autoWeight(t,avoid);let r=Math.random()*sum;for(const t of pool){r-=autoWeight(t,avoid);if(r<=0)return t;}return pool[pool.length-1];}
@@ -1439,7 +1531,7 @@ function startMatch(msgId,btnId,onReady){
   Cloud().startMatch({deckMe:decks.me.slice(),deckBot:decks.bot.slice(),botName,stage:st}).then(({profile:p,result:r})=>{
     setProfile(p);btn.disabled=false;msg(msgId,'');
     onReady();newGame(st);G.matchId=r.id;last=performance.now();
-    if(r.left)say('前回の試合の報酬 +'+r.left.gold+'G も受け取ったよ！',3);
+    if(r.left){if(talkOn)say('前回の試合の報酬 +'+r.left.gold+'G も受け取ったよ！',3);else note('前回の試合の報酬 +'+r.left.gold+'G を受け取りました');}
   }).catch(e=>{
     btn.disabled=false;msg(msgId,'試合を始められませんでした\n'+errText(e),'ng');
   });
@@ -1476,6 +1568,7 @@ window.__onReady=()=>{
       if(p.deckMe)decks.me=p.deckMe.filter(owned);
       if(p.deckBot)decks.bot=p.deckBot.filter(owned);
       if(p.botName){botName=p.botName;document.getElementById('botName').value=p.botName;}
+      talkOn=p.talk!==false;renderTalk();
       stageSel=(p.cleared||0)+1; // はじめは、まだクリアしていないステージを選んでおく
     }
     const lines=[];
@@ -1726,7 +1819,7 @@ window.__dice={get G(){return G;},update,newGame,newRanked,rankOver,decks,summon
 const GACHA_COST = 100;
 const RATES = [["ノーマル", 60], ["レア", 28], ["エピック", 10], ["伝説", 2]];
 const START_DICE = ["fire", "elec", "wind", "poison", "ice"];
-const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match", "cleared", "rank"];
+const KEYS = ["gold", "dice", "plays", "best", "botName", "deckMe", "deckBot", "match", "cleared", "rank", "talk"];
 const STAGE_WAVES = 10, FIRST_CLEAR_BONUS = 100;
 
 // 保存データ data/users/<自分のid>/profile（自分専用・ほかの人からは見えない）
@@ -1884,6 +1977,7 @@ window.Cloud = {
     });
   },
   rankSeen() { return commit(n => { if (n.rank) n.rank.report = null; }); },
+  setTalk(v) { return commit(n => { n.talk = !!v; }); },
   startMatch({ deckMe, deckBot, botName, stage }) {
     return commit(n => {
       const left = settle(n);
